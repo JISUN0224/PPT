@@ -1,0 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&display=swap');
+
+:root {
+  /* LUXE 브랜드 컬러 팔레트 */
+  --primary-brown: #8B4513;
+  --secondary-brown: #A0937D;
+  --light-brown: #D4B5A0;
+  --cream: #E8D5C4;
+  --background: #FAF7F2;
+  --accent-border: rgba(139, 69, 19, 0.15);
+  
+  /* 그림자 */
+  --shadow-soft: 0 8px 20px rgba(139, 69, 19, 0.1);
+  --shadow-medium: 0 10px 30px rgba(139, 69, 19, 0.15);
+  
+  /* 폰트 */
+  --font-display: 'Playfair Display', serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 언어별 폰트 오버라이드: 중국어는 가독성 높은 SC 계열로 통일 */
+.lang-zh {
+  --font-display: 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Heiti SC', sans-serif;
+  --font-body: 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Heiti SC', sans-serif;
+}
+
+/* 스타일 테마별 색상 오버라이드 */
+.theme-business {
+  --primary-brown: #2D5016; /* deep green */
+  --secondary-brown: #7EA06A;
+  --accent-border: rgba(45, 80, 22, 0.15);
+}
+
+.theme-academic, .theme-technical {
+  --primary-brown: #1B365D; /* deep blue */
+  --secondary-brown: #6B7DAA;
+  --accent-border: rgba(27, 54, 93, 0.15);
+}
+
+.theme-creative {
+  --primary-brown: #B8860B; /* gold */
+  --secondary-brown: #CFAE5B;
+  --accent-border: rgba(184, 134, 11, 0.2);
+}
+
+/* 기본 스타일 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background: #f5f5f5;
+  color: #333;
+}
+
+/* 유틸리티 클래스 */
+.luxe-title {
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--primary-brown);
+  text-align: center;
+}
+
+.luxe-subtitle {
+  font-size: 24px;
+  color: var(--secondary-brown);
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* 유틸: 디스플레이 폰트를 강제 적용 */
+.luxe-font-display { font-family: var(--font-display); }
+
+.luxe-card {
+  background: var(--background);
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(139, 69, 19, 0.1);
+}
+
+.luxe-button {
+  background: var(--primary-brown);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.luxe-button:hover {
+  background: #6d3610;
+  transform: translateY(-1px);
+}
+
+.slide-container {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: white;
+  border-radius: 12px;
+  box-shadow: var(--shadow-medium);
+  overflow: hidden;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .luxe-title {
+    font-size: 32px;
+  }
+  
+  .luxe-subtitle {
+    font-size: 18px;
+  }
+  
+  .luxe-card {
+    padding: 20px;
+  }
+} 
