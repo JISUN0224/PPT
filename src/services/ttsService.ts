@@ -111,7 +111,18 @@ export async function synthesizeSlideAudio(slide: any, language: 'ko' | 'zh', vo
     ? (slide?.koreanScript || slide?.content || slide?.title)
     : (slide?.chineseScript || slide?.interpretation || slide?.content || slide?.title);
   if (!text) return null;
-  return textToSpeech(text, language, voiceName);
+  try {
+    return await textToSpeech(text, language, voiceName);
+  } catch (err) {
+    try { console.warn('[TTS] primary voice failed, falling back to default', { language, voiceName, err }); } catch {}
+    // Fallback: 기본 음성으로 재시도
+    try {
+      return await textToSpeech(text, language, undefined);
+    } catch (err2) {
+      try { console.error('[TTS] fallback voice also failed', { language, err2 }); } catch {}
+      return null;
+    }
+  }
 }
 
 export async function synthesizePPT(pptData: { slides: any[] }, language: 'ko' | 'zh'):

@@ -55,7 +55,8 @@ const InterpreterPanel: React.FC<InterpreterPanelProps> = ({ language, slide, sl
       return;
     }
     const recognition = new SpeechRecognition();
-    recognition.lang = language === 'ko' ? 'ko-KR' : 'zh-CN';
+    // 인식 언어를 뷰어 스크립트의 반대 언어로 설정
+    recognition.lang = language === 'ko' ? 'zh-CN' : 'ko-KR';
     recognition.interimResults = true;
     recognition.continuous = true;
     recognition.onresult = (event: any) => {
@@ -80,7 +81,18 @@ const InterpreterPanel: React.FC<InterpreterPanelProps> = ({ language, slide, sl
     setIsRecording(false);
   };
 
-  const expectedScript: string | undefined = language === 'ko' ? (slide?.koreanScript || slide?.content) : (slide?.chineseScript || slide?.interpretation || slide?.content);
+  // 원문 스크립트(뷰어 언어)와 통역안(반대 언어)을 분리해 표시
+  const primaryScript: string | undefined = language === 'ko'
+    ? (slide?.koreanScript || slide?.content)
+    : (slide?.chineseScript || slide?.content);
+  // 통역안은 generatePPTScripts/mergePPTData에서 항상 slide.interpretation에 저장됩니다.
+  // 필요 시 보조적으로 koreanScript를 폴백으로 사용합니다.
+  const oppositeScript: string | undefined = language === 'ko'
+    ? (slide?.interpretation || '')
+    : (slide?.interpretation || slide?.koreanScript || '');
+
+  // 간단 평가는 통역 목표(반대 언어) 문장과 비교
+  const expectedScript: string | undefined = oppositeScript || primaryScript;
   const keyPoints: string[] = Array.isArray(slide?.keyPoints) ? slide.keyPoints : [];
 
   const simpleScore = useMemo(() => {
@@ -93,15 +105,20 @@ const InterpreterPanel: React.FC<InterpreterPanelProps> = ({ language, slide, sl
     return Math.round((match / exp.length) * 100);
   }, [expectedScript, recognizedText]);
 
+  const [open, setOpen] = useState(false);
+
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-[var(--primary-brown)]">통역 연습</h3>
             <p className="text-sm text-gray-600">원문: {names.primary} · 통역: {names.secondary}</p>
           </div>
           <div className="flex items-center space-x-2">
+            <Button variant="outline" size="sm" onClick={() => setOpen(o => !o)}>
+              {open ? '패널 접기' : '패널 열기'}
+            </Button>
             <Button variant="outline" size="sm" onClick={handlePlayPause} disabled={!slideAudioUrl}>
               {isPlaying ? <Pause size={16} /> : <Play size={16} />}
             </Button>
@@ -119,10 +136,16 @@ const InterpreterPanel: React.FC<InterpreterPanelProps> = ({ language, slide, sl
         <audio ref={audioRef} src={slideAudioUrl || undefined} onEnded={() => setIsPlaying(false)} hidden />
       </div>
 
+      {open && (
       <div className="flex-1 p-4 overflow-y-auto space-y-4">
         <div className="bg-gray-50 rounded-lg p-4">
           <h4 className="font-semibold text-[var(--primary-brown)] mb-2">스크립트 ({names.primary})</h4>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{expectedScript || '스크립트가 없습니다.'}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{primaryScript || '스크립트가 없습니다.'}</p>
+        </div>
+
+        <div className="bg-[var(--background)] rounded-lg p-4">
+          <h4 className="font-semibold text-[var(--primary-brown)] mb-2">통역안 ({names.secondary})</h4>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{oppositeScript || '통역안이 없습니다.'}</p>
         </div>
 
         {keyPoints.length > 0 && (
@@ -147,6 +170,7 @@ const InterpreterPanel: React.FC<InterpreterPanelProps> = ({ language, slide, sl
           <p className="text-xs text-green-700">참고: 문자 일치 기반의 간단한 지표입니다.</p>
         </div>
       </div>
+      )}
     </div>
   );
 };

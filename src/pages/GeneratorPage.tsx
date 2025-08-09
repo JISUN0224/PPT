@@ -32,7 +32,7 @@ const GeneratorPage: React.FC = () => {
 
     try {
       const pptData = await generatePPTInSteps(formData);
-      navigate('/viewer', { state: { pptData, language: formData.language } });
+      navigate('/viewer', { state: { pptData, language: formData.language, style: formData.style } });
     } catch (e: any) {
       setError(e?.message || 'PPT 생성 중 오류가 발생했습니다.');
     } finally {
@@ -74,8 +74,9 @@ const GeneratorPage: React.FC = () => {
       }
     : null;
 
+  const langClass = formData.language === 'zh' ? 'lang-zh' : '';
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-[var(--background)] to-[var(--cream)] theme-${formData.style}`}>
+    <div className={`min-h-screen bg-gradient-to-br from-[var(--background)] to-[var(--cream)] theme-${formData.style} ${langClass}`}>
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-12">
            <h1 className="luxe-title mb-4 luxe-font-display">AI PPT 생성기</h1>

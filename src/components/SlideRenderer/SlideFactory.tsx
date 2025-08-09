@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAutoFitScale } from '../../hooks/useAutoFitScale';
 import { TitleSlide, ContentSlide, ChartSlide, ComparisonSlide, ConclusionSlide } from './SlideTemplates';
 import ChartRenderer from './ChartRenderer';
 import type { SlideData } from './SlideTemplates';
@@ -94,16 +95,16 @@ function fillHtmlTemplate(rawHtml: string, slide: SlideData): string {
 }
 
 function splitByChartArea(html: string): { before: string; after: string; hasChart: boolean } {
-  // 1) 우선, luxe-card가 chart-area를 바로 감싸는 패턴을 통째로 제거 시도
-  const wrapperRegex = /<div[^>]*class=("|')[^"']*luxe-card[^"']*\1[^>]*>\s*<div[^>]*class=("|')[^"']*chart-area[^"']*\2[^>]*>\s*<\/div>\s*<\/div>/i;
+  // 1) luxe-card 래퍼 내부의 chart-area 블록 제거 (내부 컨텐츠 유무 무관, non-greedy)
+  const wrapperRegex = /<div[^>]*class=("|')[^"']*luxe-card[^"']*\1[^>]*>\s*<div[^>]*class=("|')[^"']*chart-area[^"']*\2[^>]*>[\s\S]*?<\/div>\s*<\/div>/i;
   let match = html.match(wrapperRegex);
   if (match) {
     const start = match.index ?? 0;
     const end = start + match[0].length;
     return { before: html.slice(0, start), after: html.slice(end), hasChart: true };
   }
-  // 2) fallback: chart-area 단일 div만 제거
-  const areaRegex = /<div[^>]*class=("|')[^"']*chart-area[^"']*\1[^>]*>\s*<\/div>/i;
+  // 2) chart-area 단일 div 제거 (내부 컨텐츠 유무 무관)
+  const areaRegex = /<div[^>]*class=("|')[^"']*chart-area[^"']*\1[^>]*>[\s\S]*?<\/div>/i;
   match = html.match(areaRegex);
   if (match) {
     const start = match.index ?? 0;
@@ -129,26 +130,39 @@ const SlideFactory: React.FC<SlideFactoryProps> = ({ slide, slideNumber, totalSl
       // 차트 플레이스홀더가 있을 경우 실제 ChartRenderer를 삽입해 표시
       const { before, after, hasChart } = splitByChartArea(safe);
       if (hasChart && slide.type === 'chart') {
+        const { containerRef, contentRef, scale } = useAutoFitScale({ maxScale: 1.25, paddingRatio: 0.995 });
         return (
-          <div className="relative slide-container bg-white">
+          <div className="relative slide-container bg-white" ref={containerRef}>
             <div className="absolute top-4 right-4 bg-[var(--primary-brown)] text-white text-xs px-2 py-1 rounded-md shadow">
               {slideNumber} / {totalSlides}
             </div>
-            <div className="h-full w-full px-10 py-10">
-              <h2 className="text-2xl md:text-3xl font-bold text-[var(--primary-brown)] mb-6">{slide.title}</h2>
-              <div className="bg-white rounded-lg p-4 shadow-inner">
-                <ChartRenderer chartType={slide.chartType} chartData={slide.chartData} className="w-full" />
+            <div className="h-full w-full flex items-center justify-center overflow-hidden">
+              <div ref={contentRef} style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}>
+                <div dangerouslySetInnerHTML={{ __html: before }} />
+                <div className="bg-white rounded-lg p-4 shadow-inner">
+                  <ChartRenderer chartType={slide.chartType} chartData={slide.chartData} className="w-full" />
+                </div>
+                <div dangerouslySetInnerHTML={{ __html: after }} />
               </div>
             </div>
           </div>
         );
       }
+      const { containerRef, contentRef, scale } = useAutoFitScale({ maxScale: 1.25, paddingRatio: 0.995 });
       return (
-        <div className="relative slide-container bg-white">
+        <div className="relative slide-container bg-white" ref={containerRef}>
           <div className="absolute top-4 right-4 bg-[var(--primary-brown)] text-white text-xs px-2 py-1 rounded-md shadow">
             {slideNumber} / {totalSlides}
           </div>
-          <div className="h-full w-full" dangerouslySetInnerHTML={{ __html: safe }} />
+          <div
+            className="h-full w-full flex items-center justify-center overflow-hidden"
+          >
+            <div
+              ref={contentRef}
+              style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
+              dangerouslySetInnerHTML={{ __html: safe }}
+            />
+          </div>
         </div>
       );
     }

@@ -43,6 +43,7 @@ const PPTViewer: React.FC = () => {
     slides: []
   };
   const language: 'ko' | 'zh' = location.state?.language || 'ko';
+  const style: 'business' | 'academic' | 'creative' | 'technical' = location.state?.style || 'business';
 
   const handleSlideChange = (slideNumber: number) => {
     setCurrentSlide(slideNumber);
@@ -115,11 +116,12 @@ const PPTViewer: React.FC = () => {
   const secondaryLangName = language === 'ko' ? '중국어' : '한국어';
 
   const langClass = language === 'zh' ? 'lang-zh' : '';
+  const themeClass = `theme-${style}`;
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-[var(--background)] to-[var(--cream)] theme-${language === 'ko' ? 'business' : 'academic'} ${langClass}`}>
+    <div className={`min-h-screen bg-gradient-to-br from-[var(--background)] to-[var(--cream)] ${themeClass} ${langClass}`}>
       <div className="flex h-screen">
         {/* 슬라이드 썸네일 (15%) */}
-        <div className="w-[15%] bg-white border-r border-gray-200 overflow-y-auto">
+        <div className="w-[14%] bg-white border-r border-gray-200 overflow-y-auto">
           <div className="p-4">
             <h3 className="text-lg font-bold text-[var(--primary-brown)] mb-4">
               슬라이드
@@ -147,8 +149,8 @@ const PPTViewer: React.FC = () => {
           </div>
         </div>
 
-        {/* 메인 뷰어 (55%) */}
-        <div className="w-[55%] flex flex-col">
+        {/* 메인 뷰어 (65%) - 콘텐츠 공간 확대 */}
+        <div className="w-[65%] flex flex-col">
           {/* 헤더 */}
           <div className="bg-white border-b border-gray-200 p-4">
             <div className="flex items-center justify-between">
@@ -192,8 +194,8 @@ const PPTViewer: React.FC = () => {
           </div>
 
           {/* 슬라이드 뷰어 */}
-          <div className="flex-1 p-8 flex items-center justify-center">
-            <div className="max-w-4xl w-full">
+          <div className="flex-1 p-6 flex items-center justify-center">
+            <div className="max-w-6xl w-full">
               {currentSlideData ? (
                 <SlideFactory slide={currentSlideData} slideNumber={currentSlide} totalSlides={pptData.slides.length} />
               ) : (
@@ -207,8 +209,8 @@ const PPTViewer: React.FC = () => {
           </div>
         </div>
 
-        {/* 통역 패널 (30%) */}
-        <div className="w-[30%] bg-white border-l border-gray-200 flex flex-col">
+        {/* 통역 패널 (21%) */}
+        <div className="w-[21%] bg-white border-l border-gray-200 flex flex-col">
           <div className="p-3 border-b border-gray-100 flex items-center gap-2">
             <label className="text-sm text-gray-600">음성</label>
             <select className="text-sm border rounded px-2 py-1" value={voiceName}

@@ -23,25 +23,51 @@
 .lang-zh {
   --font-display: 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Heiti SC', sans-serif;
   --font-body: 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Heiti SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-kerning: normal;
+  font-feature-settings: 'kern';
+}
+
+/* 강제 통일: 중국어 페이지에서는 모든 텍스트를 SC 계열로 */
+.lang-zh, .lang-zh * {
+  font-family: var(--font-body) !important;
+}
+.lang-zh .luxe-font-display {
+  font-family: var(--font-display) !important;
+}
+
+/* 중국어 제목은 자간을 강제로 0으로(영문용 자간이 중국어에 부적합) */
+.lang-zh h1, .lang-zh h2, .lang-zh h3 {
+  letter-spacing: 0 !important;
 }
 
 /* 스타일 테마별 색상 오버라이드 */
 .theme-business {
-  --primary-brown: #2D5016; /* deep green */
+  /* 파스텔 그린 톤 */
+  --primary-brown: #2D5016; /* used for accents like buttons */
   --secondary-brown: #7EA06A;
-  --accent-border: rgba(45, 80, 22, 0.15);
+  --accent-border: rgba(45, 80, 22, 0.12);
+  --background: #F2F9F4; /* very light mint */
+  --cream: #E6F3EA;      /* mint tint for gradient */
 }
 
 .theme-academic, .theme-technical {
-  --primary-brown: #1B365D; /* deep blue */
+  /* 파스텔 블루 톤 */
+  --primary-brown: #1B365D; /* deep blue accents */
   --secondary-brown: #6B7DAA;
-  --accent-border: rgba(27, 54, 93, 0.15);
+  --accent-border: rgba(27, 54, 93, 0.12);
+  --background: #F2F7FD; /* very light blue */
+  --cream: #E7F0FB;      /* blue tint for gradient */
 }
 
 .theme-creative {
-  --primary-brown: #B8860B; /* gold */
+  /* 파스텔 골드/살몬 톤 */
+  --primary-brown: #B8860B; /* golden accents */
   --secondary-brown: #CFAE5B;
-  --accent-border: rgba(184, 134, 11, 0.2);
+  --accent-border: rgba(184, 134, 11, 0.18);
+  --background: #FFF6E9; /* soft warm */
+  --cream: #FCEFD9;      /* warm tint */
 }
 
 /* 기본 스타일 */
@@ -107,6 +133,24 @@ body {
   border-radius: 12px;
   box-shadow: var(--shadow-medium);
   overflow: hidden;
+}
+
+/* 메인 뷰어 내부 여백 최적화: 콘텐츠 확대 시 효율적 사용 */
+.viewer-tight > .slide-container {
+  border-radius: 10px;
+}
+
+/* 공통 카드 인터랙션 */
+.ppt-card {
+  transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease;
+  will-change: transform;
+}
+.ppt-card:hover,
+.ppt-card:focus-visible {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 28px rgba(0,0,0,.12);
+  background-color: var(--cream);
+  outline: none;
 }
 
 /* 반응형 디자인 */

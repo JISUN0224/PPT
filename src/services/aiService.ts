@@ -5,6 +5,10 @@
   - 외부 라이브러리 없이 fetch 사용
 */
 
+import type { GeneratePPTParams } from '../types';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { getTemplateSequence, bindTemplateData } from '../utils/htmlTemplates';
+
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 const MODEL_NAME = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || 'gemini-2.5-flash';
 const API_ENDPOINT_BASE = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -82,32 +86,7 @@ function generateDefaultChartData(topic: string) {
   };
 }
 
-function ensureChartSlide(ppt: any, topic: string): any {
-  if (!ppt || !Array.isArray(ppt.slides)) return ppt;
-  const hasChart = ppt.slides.some((s: any) => s?.type === 'chart' && s?.chartData && Array.isArray(s.chartData.labels));
-  if (!hasChart) {
-    // 두 번째 슬라이드를 기본 차트로 바꿔줌 (없으면 첫 번째 다음)
-    const idx = Math.min(1, Math.max(0, ppt.slides.length - 1));
-    const base = ppt.slides[idx] || { slideNumber: idx + 1, title: ppt.title || '차트' };
-    ppt.slides[idx] = {
-      ...base,
-      type: 'chart',
-      title: base.title || '데이터 분석',
-      chartType: 'bar',
-      chartData: generateDefaultChartData(topic),
-    };
-    logAI('Injected default chart slide');
-  } else {
-    // chart slide에 데이터가 비어 있으면 채워넣기
-    ppt.slides = ppt.slides.map((s: any) => {
-      if (s?.type === 'chart' && (!s.chartData || !Array.isArray(s.chartData.labels))) {
-        return { ...s, chartType: s.chartType || 'bar', chartData: generateDefaultChartData(topic) };
-      }
-      return s;
-    });
-  }
-  return ppt;
-}
+// legacy ensureChartSlide removed (template-based generation adds charts explicitly)
 
 // 간소화된 메인 프롬프트
 function buildPrompt(params: {
@@ -120,6 +99,7 @@ function buildPrompt(params: {
   const { topic, details = '', style, slideCount, language } = params;
   const languageName = language === 'ko' ? '한국어' : '중국어(간체)';
   const scriptField = language === 'ko' ? 'koreanScript' : 'chineseScript';
+  void details;
 
   return `전문 PPT를 생성하세요. JSON만 반환.
 
@@ -136,6 +116,7 @@ function buildPrompt(params: {
 스키마 요약:
 {"title":string,"slides":[{"slideNumber":number,"type":"title|content|chart|comparison|conclusion","title":string,"subtitle"?:string,"content"?:string,"points"?:string[],"chartType"?:"bar|line|doughnut|scatter","chartData"?:{"labels":string[],"datasets":[{"label":string,"data":number[]}]},"stats"?:[{"value":string,"label":string}],"${scriptField}":string,"interpretation":string,"layoutVariant":string,"accentColor":"green|blue|gold|default"}]} `;
 }
+void buildPrompt;
 
 // 더 압축된 폴백 프롬프트
 function buildCompactPrompt(params: {
@@ -147,10 +128,12 @@ function buildCompactPrompt(params: {
 }): string {
   const { topic, details = '', style, slideCount, language } = params;
   const scriptField = language === 'ko' ? 'koreanScript' : 'chineseScript';
+  void details;
   return `JSON ONLY. Topic=\"${topic}\" Style=${style} Slides=${slideCount} Language=${language}.
 - Include at least one chart slide with chartType and chartData(labels 3-5, data 3-5).
 Schema:{title,slides:[{slideNumber,type,title,subtitle?,content?,points?,chartType?,chartData?,stats?,${scriptField}(80-160),interpretation(80-160),layoutVariant,accentColor}]}`;
 }
+void buildCompactPrompt;
 
 async function callGemini(prompt: string, model: string, generationConfig: any): Promise<any> {
   const endpoint = `${API_ENDPOINT_BASE(model)}?key=${API_KEY ?? ''}`;
@@ -177,12 +160,62 @@ async function callGemini(prompt: string, model: string, generationConfig: any):
 }
 
 function extractJsonString(text: string): string {
-  const fenced = text.match(/```(?:json)?\n([\s\S]*?)\n```/i);
-  if (fenced && fenced[1]) return fenced[1].trim();
-  const first = text.indexOf('{');
-  const last = text.lastIndexOf('}');
-  if (first !== -1 && last !== -1 && last > first) return text.slice(first, last + 1);
-  return text.trim();
+  if (!text) return text;
+  // 1) Normalize and strip zero width chars
+  let t = text.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  // 2) If it's already valid JSON, return as-is
+  try {
+    JSON.parse(t);
+    return t;
+  } catch {}
+  // 3) Fenced code block ```json ... ```
+  const fenced = t.match(/```\s*json\s*\n([\s\S]*?)\n```/i) || t.match(/```\s*\n([\s\S]*?)\n```/i);
+  if (fenced && fenced[1]) {
+    const block = fenced[1].trim();
+    try { JSON.parse(block); return block; } catch {}
+  }
+  // 4) Scan for first balanced JSON object or array
+  const startIdxCandidates: number[] = [];
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (ch === '{' || ch === '[') { startIdxCandidates.push(i); break; }
+  }
+  if (startIdxCandidates.length > 0) {
+    const start = startIdxCandidates[0];
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    let end = -1;
+    const opener = t[start];
+    const closer = opener === '{' ? '}' : ']';
+    for (let i = start; i < t.length; i++) {
+      const ch = t[i];
+      if (inString) {
+        if (escape) { escape = false; }
+        else if (ch === '\\') { escape = true; }
+        else if (ch === '"') { inString = false; }
+      } else {
+        if (ch === '"') inString = true;
+        else if (ch === opener) depth++;
+        else if (ch === closer) {
+          depth--;
+          if (depth === 0) { end = i + 1; break; }
+        }
+      }
+    }
+    if (end !== -1) {
+      const candidate = t.slice(start, end).trim();
+      try { JSON.parse(candidate); return candidate; } catch {}
+    }
+  }
+  // 5) last resort: slice between first { and last }
+  const first = t.indexOf('{');
+  const last = t.lastIndexOf('}');
+  if (first !== -1 && last !== -1 && last > first) {
+    const slice = t.slice(first, last + 1).trim();
+    try { JSON.parse(slice); return slice; } catch {}
+  }
+  return t;
 }
 
 function clampSlideCount(n: number): number {
@@ -219,7 +252,7 @@ function normalizePPT(ppt: any, requestedCount: number): any {
   }));
   // 스타일 기반 기본 accentColor 보정
   const inferredAccent = defaultAccentForStyle((ppt?.style as any) || 'business');
-  ppt.slides = ppt.slides.map((sl: any, i: number) => ({
+  ppt.slides = ppt.slides.map((sl: any) => ({
     ...sl,
     accentColor: sl.accentColor || inferredAccent,
   }));
@@ -565,8 +598,218 @@ export function mergePPTData(structure: any, scripts: any, language: 'ko' | 'zh'
 }
 
 export const generatePPTInSteps = async (params: GeneratePPTParamsLocal): Promise<any> => {
-  const structure = await generatePPTStructure(params);
+  return generatePPTWithTemplates(params);
+};
+
+// ===== 템플릿 기반 생성: 프롬프트 → JSON → HTML 바인딩 → 스크립트 병합 =====
+function buildTemplatePrompt(params: GeneratePPTParams): string {
+  const templateSequence = getTemplateSequence(params.slideCount);
+  return `당신은 전문 프레젠테이션 컨설턴트입니다. 다음 구조로 ${params.slideCount}페이지 PPT를 생성해주세요.
+
+주제: ${params.topic}
+세부사항: ${params.details || '없음'}
+스타일: ${params.style}
+템플릿 순서: ${templateSequence.join(' → ')}
+
+각 슬라이드별 요구사항:
+
+**title 슬라이드**: 
+- title: 임팩트 있는 메인 제목
+- subtitle: 부제목
+- content: 한 줄 설명
+
+**content 슬라이드**:
+- title: 섹션 제목
+- point1~4: 각 카드의 제목 (간결하게)
+- point1Detail~4Detail: 각 카드의 상세 설명 (2-3문장)
+
+**chart 슬라이드**:
+- title: 차트 제목
+- insight1~3: 우측 패널의 인사이트 (각 2-3문장)
+- chartType: 'bar', 'line', 'doughnut' 중 선택
+- chartData: Chart.js 호환 데이터
+
+**process 슬라이드**:
+- title: 프로세스 제목
+- step1Title~4Title: 각 단계 제목
+- step1Content~4Content: 각 단계 설명
+
+**conclusion 슬라이드**:
+- title: 결론 제목
+- point1~3: 핵심 성과 포인트
+- mainStat, mainStatLabel: 메인 통계
+- stat1Value~3Value, stat1Label~3Label: 하단 통계 카드
+
+JSON 형식으로만 응답하세요. 각 슬라이드는 templateType 필드로 어떤 템플릿을 사용할지 지정하세요.
+
+필수 필드 체크리스트(템플릿별):
+- title: title, subtitle, content
+- content: title, point1, point1Detail, point2, point2Detail, point3, point3Detail, point4, point4Detail
+- chart: title, insight1, insight2, insight3, chartType, chartData
+- process: title, step1Title, step1Content, step2Title, step2Content, step3Title, step3Content, step4Title, step4Content
+- conclusion: title, point1, point2, point3, mainStat, mainStatLabel, stat1Value, stat1Label, stat2Value, stat2Label, stat3Value, stat3Label
+
+아래 예시 JSON 형식을 정확히 따라주세요(설명/백틱 금지):
+{
+  "title": "프레젠테이션 제목",
+  "slides": [
+    {
+      "slideNumber": 1,
+      "type": "title",
+      "templateType": "title",
+      "title": "메인 제목",
+      "subtitle": "부제목",
+      "content": "한 줄 설명"
+    },
+    {
+      "slideNumber": 2,
+      "type": "content",
+      "templateType": "content",
+      "title": "섹션 제목",
+      "point1": "첫번째 포인트 제목",
+      "point1Detail": "첫번째 포인트 상세 설명 2-3문장",
+      "point2": "두번째 포인트 제목",
+      "point2Detail": "두번째 포인트 상세 설명 2-3문장",
+      "point3": "세번째 포인트 제목",
+      "point3Detail": "세번째 포인트 상세 설명 2-3문장",
+      "point4": "네번째 포인트 제목",
+      "point4Detail": "네번째 포인트 상세 설명 2-3문장"
+    },
+    {
+      "slideNumber": 3,
+      "type": "conclusion",
+      "templateType": "conclusion",
+      "title": "결론 제목",
+      "point1": "핵심 성과 1",
+      "point2": "핵심 성과 2",
+      "point3": "핵심 성과 3",
+      "mainStat": "85%",
+      "mainStatLabel": "성공률",
+      "stat1Value": "150만",
+      "stat1Label": "이용자 수",
+      "stat2Value": "300%",
+      "stat2Label": "성장률",
+      "stat3Value": "95점",
+      "stat3Label": "만족도"
+    }
+  ]
+}`;
+}
+
+async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise<any> {
+  ensureApiKeyPresent();
+  const prompt = buildTemplatePrompt({
+    topic: params.topic,
+    details: params.details,
+    style: params.style,
+    slideCount: params.slideCount,
+  } as GeneratePPTParams);
+
+  const data = await callGemini(prompt, MODEL_NAME, {
+    temperature: 0.65,
+    topP: 0.8,
+    topK: 40,
+    maxOutputTokens: getMaxTokens(params.slideCount),
+    responseMimeType: 'application/json',
+  });
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  if (!text) throw new Error('템플릿 기반 응답이 비어 있습니다.');
+  const parsed = JSON.parse(extractJsonString(text));
+
+  const sequence = getTemplateSequence(params.slideCount);
+  const slidesIn: any[] = Array.isArray(parsed?.slides) ? parsed.slides : [];
+  const title = typeof parsed?.title === 'string' && parsed.title.trim() ? parsed.title : params.topic;
+
+  const mapType = (tpl?: string): 'title' | 'content' | 'chart' | 'comparison' | 'conclusion' => {
+    switch ((tpl || '').toLowerCase()) {
+      case 'title': return 'title';
+      case 'chart': return 'chart';
+      case 'conclusion': return 'conclusion';
+      case 'process': return 'content';
+      case 'content':
+      default: return 'content';
+    }
+  };
+
+  const slides = sequence.map((tpl, i) => {
+    const candidate = slidesIn[i] || {};
+    const templateType = candidate.templateType || tpl;
+    const type = mapType(templateType);
+
+    const stats: Array<{ value: string; label: string }> = [];
+    if (candidate.stat1Value || candidate.stat1Label) stats.push({ value: String(candidate.stat1Value || ''), label: String(candidate.stat1Label || '') });
+    if (candidate.stat2Value || candidate.stat2Label) stats.push({ value: String(candidate.stat2Value || ''), label: String(candidate.stat2Label || '') });
+    if (candidate.stat3Value || candidate.stat3Label) stats.push({ value: String(candidate.stat3Value || ''), label: String(candidate.stat3Label || '') });
+
+    const points: string[] = [];
+    ['point1', 'point2', 'point3', 'point4'].forEach((k: string) => { if (candidate[k]) points.push(String(candidate[k])); });
+
+    // 데이터 보강: content 템플릿의 상세 필드가 누락된 경우 기본값 보완
+    if (templateType === 'content') {
+      for (let idx = 1; idx <= 4; idx++) {
+        const pk = `point${idx}`;
+        const dk = `point${idx}Detail`;
+        if (!candidate[pk]) candidate[pk] = `포인트 ${idx}`;
+        if (!candidate[dk]) candidate[dk] = `${candidate[pk]} 상세 설명`;
+      }
+    }
+    // 데이터 보강: conclusion 핵심 통계 기본값
+    if (templateType === 'conclusion') {
+      // 포인트 1~3 기본 채움
+      for (let idx = 1; idx <= 3; idx++) {
+        const pk = `point${idx}`;
+        if (!candidate[pk]) candidate[pk] = `핵심 성과 ${idx}`;
+      }
+      candidate.mainStat = candidate.mainStat || (candidate.stat1Value || '75%');
+      candidate.mainStatLabel = candidate.mainStatLabel || (candidate.stat1Label || '달성률');
+      // 하단 통계 카드 3개 기본 채움
+      if (!candidate.stat1Value) candidate.stat1Value = '75%';
+      if (!candidate.stat1Label) candidate.stat1Label = '달성률';
+      if (!candidate.stat2Value) candidate.stat2Value = '3년';
+      if (!candidate.stat2Label) candidate.stat2Label = '예상 기간';
+      if (!candidate.stat3Value) candidate.stat3Value = 'TOP3';
+      if (!candidate.stat3Label) candidate.stat3Label = '우선 순위';
+      // stats 배열도 보강
+      if (stats.length === 0) {
+        stats.push(
+          { value: String(candidate.stat1Value), label: String(candidate.stat1Label) },
+          { value: String(candidate.stat2Value), label: String(candidate.stat2Label) },
+          { value: String(candidate.stat3Value), label: String(candidate.stat3Label) },
+        );
+      }
+    }
+    // 데이터 보강: chart 인사이트 기본값
+    if (templateType === 'chart') {
+      if (!candidate.insight1) candidate.insight1 = '핵심 지표가 지속적인 상승 추세를 보이며 성장 가능성을 시사합니다.';
+      if (!candidate.insight2) candidate.insight2 = '시장 동향은 경쟁 심화와 함께 차별화 전략의 중요성을 강조합니다.';
+      if (!candidate.insight3) candidate.insight3 = '전략적으로 우선순위를 정하고 실행 로드맵을 수립해야 합니다.';
+    }
+
+    let chartType = candidate.chartType;
+    let chartData = candidate.chartData;
+    if (templateType === 'chart') {
+      chartType = chartType || 'bar';
+      if (!chartData || !Array.isArray(chartData?.labels)) chartData = generateDefaultChartData(params.topic);
+    }
+
+    const html = bindTemplateData({ ...candidate, templateType, points, stats });
+
+    return {
+      slideNumber: i + 1,
+      type,
+      title: candidate.title || title,
+      subtitle: candidate.subtitle,
+      content: candidate.content,
+      points: points.length > 0 ? points : undefined,
+      chartType,
+      chartData,
+      stats: stats.length > 0 ? stats : undefined,
+      html,
+    };
+  });
+
+  const structure = { title, slides };
   const scripts = await generatePPTScripts({ structure, topic: params.topic, language: params.language });
   const merged = mergePPTData(structure, scripts, params.language);
-  return ensureChartSlide(merged, params.topic);
-};
+  return merged;
+}
