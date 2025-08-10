@@ -51,6 +51,15 @@ function fillHtmlTemplate(rawHtml: string, slide: SlideData): string {
     koreanScript: slide.koreanScript || '',
     chineseScript: slide.chineseScript || '',
     interpretation: slide.interpretation || '',
+    // 로컬라이즈드 고정 라벨들
+    chartPlaceholder: (slide as any)._labels?.chartPlaceholder || (slide as any).chartPlaceholder || '',
+    insightTitle1: (slide as any)._labels?.insightTitle1 || (slide as any).insightTitle1 || '',
+    insightTitle2: (slide as any)._labels?.insightTitle2 || (slide as any).insightTitle2 || '',
+    insightTitle3: (slide as any)._labels?.insightTitle3 || (slide as any).insightTitle3 || '',
+    keyAchievementsTitle: (slide as any)._labels?.keyAchievementsTitle || (slide as any).keyAchievementsTitle || '',
+    valueBadge1: (slide as any)._labels?.valueBadge1 || (slide as any).valueBadge1 || '',
+    valueBadge2: (slide as any)._labels?.valueBadge2 || (slide as any).valueBadge2 || '',
+    valueBadge3: (slide as any)._labels?.valueBadge3 || (slide as any).valueBadge3 || '',
   };
 
   // point1..point6 개별 치환

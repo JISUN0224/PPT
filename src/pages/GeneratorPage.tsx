@@ -32,7 +32,7 @@ const GeneratorPage: React.FC = () => {
 
     try {
       const pptData = await generatePPTInSteps(formData);
-      navigate('/viewer', { state: { pptData, language: formData.language, style: formData.style } });
+      navigate('/viewer', { state: { pptData, language: formData.language, style: formData.style, forceTour: true } });
     } catch (e: any) {
       setError(e?.message || 'PPT 생성 중 오류가 발생했습니다.');
     } finally {

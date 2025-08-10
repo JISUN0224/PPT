@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Button } from '../components/UI';
+import { Button, Tour } from '../components/UI';
 import { ChevronLeft, ChevronRight, Play, Pause, Volume2 } from 'lucide-react';
 import { SlideFactory } from '../components/SlideRenderer';
 import InterpreterPanel from '../components/InterpreterPanel/InterpreterPanel';
@@ -117,11 +117,68 @@ const PPTViewer: React.FC = () => {
 
   const langClass = language === 'zh' ? 'lang-zh' : '';
   const themeClass = `theme-${style}`;
+  const [showTour, setShowTour] = useState<boolean>(() => {
+    try {
+      const forced = location.state?.forceTour === true;
+      if (forced) return true;
+      return localStorage.getItem('ppt-tour-done') !== '1';
+    } catch { return true; }
+  });
+  const closeTour = (opts?: { dontShowAgain?: boolean }) => {
+    try {
+      if (opts?.dontShowAgain) localStorage.setItem('ppt-tour-done', '1');
+    } catch {}
+    setShowTour(false);
+  };
+  const tourSteps = [
+    {
+      id: 'thumbs',
+      title: '슬라이드 탐색',
+      description: '왼쪽 목록에서 슬라이드를 클릭하여 이동할 수 있습니다.',
+      targetSelector: '[data-tour="thumbnails"]',
+      padding: 8,
+    },
+    {
+      id: 'viewer',
+      title: '슬라이드 보기',
+      description: '가운데 영역에서 슬라이드를 확인하고 좌우 화살표 또는 버튼으로 이동합니다.',
+      targetSelector: '[data-tour="viewer"]',
+      padding: 12,
+    },
+    {
+      id: 'interpreter',
+      title: '통역 패널',
+      description: '오른쪽 패널에서 원문과 통역안을 각각 숨기거나 펼칠 수 있어요. 재생 버튼으로 AI 음성을 듣고, 마이크 버튼으로 내 발음을 녹음해 비교 연습을 합니다.',
+      targetSelector: '[data-tour="interpreter"]',
+      padding: 10,
+    },
+    {
+      id: 'interpreter-script',
+      title: '스크립트(원문)',
+      description: '선택된 언어의 원문 스크립트입니다. 토글로 숨기고 통역만 보면서 연습할 수 있어요.',
+      targetSelector: '[data-tour="interpreter"] [data-tour="ip-primary"]',
+      padding: 8,
+    },
+    {
+      id: 'interpreter-translation',
+      title: '통역안(반대 언어)',
+      description: 'AI가 생성한 통역안입니다. 토글로 숨겼다가 답처럼 확인할 수 있어요.',
+      targetSelector: '[data-tour="interpreter"] [data-tour="ip-opposite"]',
+      padding: 8,
+    },
+    {
+      id: 'interpreter-record',
+      title: '재생/녹음',
+      description: '재생 버튼으로 AI 음성을 듣고, 마이크 버튼으로 녹음을 시작합니다. 정지 버튼으로 녹음을 종료해 인식 결과를 확인하세요.',
+      targetSelector: '[data-tour="interpreter"] [data-tour="ip-record"]',
+      padding: 8,
+    },
+  ];
   return (
     <div className={`min-h-screen bg-gradient-to-br from-[var(--background)] to-[var(--cream)] ${themeClass} ${langClass}`}>
       <div className="flex h-screen">
         {/* 슬라이드 썸네일 (15%) */}
-        <div className="w-[14%] bg-white border-r border-gray-200 overflow-y-auto">
+        <div className="w-[14%] bg-white border-r border-gray-200 overflow-y-auto" data-tour="thumbnails">
           <div className="p-4">
             <h3 className="text-lg font-bold text-[var(--primary-brown)] mb-4">
               슬라이드
@@ -150,7 +207,7 @@ const PPTViewer: React.FC = () => {
         </div>
 
         {/* 메인 뷰어 (65%) - 콘텐츠 공간 확대 */}
-        <div className="w-[65%] flex flex-col">
+        <div className="w-[65%] flex flex-col" data-tour="viewer">
           {/* 헤더 */}
           <div className="bg-white border-b border-gray-200 p-4">
             <div className="flex items-center justify-between">
@@ -210,7 +267,7 @@ const PPTViewer: React.FC = () => {
         </div>
 
         {/* 통역 패널 (21%) */}
-        <div className="w-[21%] bg-white border-l border-gray-200 flex flex-col">
+        <div className="w-[21%] bg-white border-l border-gray-200 flex flex-col" data-tour="interpreter">
           <div className="p-3 border-b border-gray-100 flex items-center gap-2">
             <label className="text-sm text-gray-600">음성</label>
             <select className="text-sm border rounded px-2 py-1" value={voiceName}
@@ -258,8 +315,12 @@ const PPTViewer: React.FC = () => {
               <ChevronRight size={16} />
             </Button>
           </div>
+          <Button onClick={() => setShowTour(true)} variant="outline" size="sm">도움말</Button>
         </div>
       </div>
+
+      {/* Onboarding Tour */}
+      <Tour steps={tourSteps} visible={showTour} onClose={closeTour} />
     </div>
   );
 };

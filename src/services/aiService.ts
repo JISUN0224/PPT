@@ -156,40 +156,87 @@ async function callGemini(prompt: string, model: string, generationConfig: any):
   logAI('Raw keys', Object.keys(data || {}));
   const um = data?.usageMetadata;
   if (um) logAI('Tokens', { prompt: um.promptTokenCount, total: um.totalTokenCount, thoughts: um.thoughtsTokenCount });
+  // Deep debug for response structure (safe/truncated)
+  try {
+    (window as any).lastGeminiResponse = data;
+    const candidatesLen = Array.isArray(data?.candidates) ? data.candidates.length : 0;
+    const first = data?.candidates?.[0];
+    const finish = first?.finishReason;
+    const parts = first?.content?.parts;
+    const firstText = Array.isArray(parts)
+      ? (parts.map((p: any) => p?.text).filter(Boolean).join(' | ') || '')
+      : '';
+    console.log('=== GEMINI DEBUG ===');
+    console.log('[Gemini] candidates length:', candidatesLen);
+    console.log('[Gemini] first finishReason:', finish);
+    console.log('[Gemini] first parts len:', Array.isArray(parts) ? parts.length : 'n/a');
+    if (firstText) console.log('[Gemini] first text (joined, truncated):', String(firstText).slice(0, 500));
+    const truncated = JSON.stringify(data).slice(0, 2000);
+    console.log('[Gemini] full response (truncated 2k):', truncated);
+  } catch {}
   return data;
 }
 
 function extractJsonString(text: string): string {
   if (!text) return text;
+  
   // 1) Normalize and strip zero width chars
   let t = text.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  
   // 2) If it's already valid JSON, return as-is
   try {
     JSON.parse(t);
     return t;
   } catch {}
-  // 3) Fenced code block ```json ... ```
-  const fenced = t.match(/```\s*json\s*\n([\s\S]*?)\n```/i) || t.match(/```\s*\n([\s\S]*?)\n```/i);
+  
+  // 3) Remove common AI model prefixes/suffixes
+  t = t.replace(/^.*?(?=\{)/s, '').replace(/(?<=\}).*$/s, '').trim();
+  if (t) {
+    try {
+      JSON.parse(t);
+      return t;
+    } catch {}
+  }
+  
+  // 4) Fenced code block ```json ... ``` or ``` ... ```
+  const fenced = text.match(/```\s*(?:json)?\s*\n?([\s\S]*?)\n?```/i);
   if (fenced && fenced[1]) {
     const block = fenced[1].trim();
-    try { JSON.parse(block); return block; } catch {}
+    try { 
+      JSON.parse(block); 
+      return block; 
+    } catch {}
   }
-  // 4) Scan for first balanced JSON object or array
+  
+  // 5) Look for JSON object with balanced braces
+  const jsonMatches = text.match(/\{[\s\S]*\}/g);
+  if (jsonMatches) {
+    for (const match of jsonMatches) {
+      try {
+        JSON.parse(match);
+        return match;
+      } catch {}
+    }
+  }
+  
+  // 6) Scan for first balanced JSON object or array
   const startIdxCandidates: number[] = [];
-  for (let i = 0; i < t.length; i++) {
-    const ch = t[i];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (ch === '{' || ch === '[') { startIdxCandidates.push(i); break; }
   }
+  
   if (startIdxCandidates.length > 0) {
     const start = startIdxCandidates[0];
     let depth = 0;
     let inString = false;
     let escape = false;
     let end = -1;
-    const opener = t[start];
+    const opener = text[start];
     const closer = opener === '{' ? '}' : ']';
-    for (let i = start; i < t.length; i++) {
-      const ch = t[i];
+    
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
       if (inString) {
         if (escape) { escape = false; }
         else if (ch === '\\') { escape = true; }
@@ -203,19 +250,28 @@ function extractJsonString(text: string): string {
         }
       }
     }
+    
     if (end !== -1) {
-      const candidate = t.slice(start, end).trim();
-      try { JSON.parse(candidate); return candidate; } catch {}
+      const candidate = text.slice(start, end).trim();
+      try { 
+        JSON.parse(candidate); 
+        return candidate; 
+      } catch {}
     }
   }
-  // 5) last resort: slice between first { and last }
-  const first = t.indexOf('{');
-  const last = t.lastIndexOf('}');
+  
+  // 7) Last resort: slice between first { and last }
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
   if (first !== -1 && last !== -1 && last > first) {
-    const slice = t.slice(first, last + 1).trim();
-    try { JSON.parse(slice); return slice; } catch {}
+    const slice = text.slice(first, last + 1).trim();
+    try { 
+      JSON.parse(slice); 
+      return slice; 
+    } catch {}
   }
-  return t;
+  
+  return text;
 }
 
 function clampSlideCount(n: number): number {
@@ -600,15 +656,169 @@ export function mergePPTData(structure: any, scripts: any, language: 'ko' | 'zh'
 export const generatePPTInSteps = async (params: GeneratePPTParamsLocal): Promise<any> => {
   return generatePPTWithTemplates(params);
 };
+// ===== 내용 평가 보조 API =====
+export async function evaluateContentWithAI(args: { reference: string; hypothesis: string; language: 'ko' | 'zh' }): Promise<any> {
+  const langName = args.language === 'zh' ? 'Chinese' : 'Korean';
+  const EVAL_MODEL = (import.meta.env.VITE_GEMINI_EVAL_MODEL as string | undefined) || 'gemini-1.5-flash';
+  const ref = String(args.reference || '').slice(0, 800);
+  const hyp = String(args.hypothesis || '').slice(0, 800);
+
+  const compactPrompt = `통역 품질 평가. JSON만 반환.
+언어: ${langName}
+원문: ${ref}
+사용자 통역: ${hyp}
+
+평가 기준(0-100 정수):
+- accuracy(정확도): 의미 보존/오역·왜곡 여부
+- completeness(완성도): 누락/축약 비율(30% 이상 누락 시 큰 감점)
+- fluency(자연스러움): 문법·연결·가독성(표현 차이는 허용)
+
+스키마(JSON ONLY): {"accuracy":number,"completeness":number,"fluency":number,
+"summary":"한줄평가","tips":"개선점","details":["오류→교정","오류→교정"]}`;
+
+  // Note: response schema is not used in REST v1beta to avoid INVALID_ARGUMENT errors
+
+  const data = await callGemini(compactPrompt, EVAL_MODEL, {
+    temperature: 0.2,
+    topP: 0.9,
+    topK: 40,
+    maxOutputTokens: 256,
+    responseMimeType: 'application/json',
+  });
+  const finish = data?.candidates?.[0]?.finishReason;
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+
+  logAI('Evaluation request:', {
+    referenceLength: ref.length,
+    hypothesisLength: hyp.length,
+    language: args.language,
+    finishReason: finish,
+  });
+  logAI('Raw response text:', text || '(empty)');
+
+  // Helper: new schema uses accuracy/completeness/fluency
+  const isValid = (obj: any) => obj &&
+    Number.isFinite(Number(obj.accuracy)) &&
+    Number.isFinite(Number(obj.completeness)) &&
+    Number.isFinite(Number(obj.fluency));
+
+  // Try parse
+  try {
+    const trimmed = (text || '').trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      const parsedDirect = JSON.parse(trimmed);
+      if (isValid(parsedDirect)) {
+        logAI('Parsed result (direct):', parsedDirect);
+        return parsedDirect;
+      }
+    }
+    const jsonStr = extractJsonString(text || '{}');
+    const parsed = JSON.parse(jsonStr);
+    if (isValid(parsed)) {
+      logAI('Parsed result:', parsed);
+      return parsed;
+    }
+  } catch {}
+
+  // Retry when truncated / token limit
+  if (finish === 'MAX_TOKENS' || !text) {
+    logAI('Token limit or empty parts. Retrying with ultra-compact prompt and higher tokens.');
+    const ultra = `JSON ONLY. L=${langName}. R=${ref.slice(0, 200)} H=${hyp.slice(0, 200)} S={"accuracy":number,"completeness":number,"fluency":number,"summary":string,"tips":string,"details":string[]}`;
+    try {
+      const data2 = await callGemini(ultra, EVAL_MODEL, {
+        temperature: 0.15,
+        topP: 0.9,
+        topK: 40,
+        maxOutputTokens: 64,
+        responseMimeType: 'application/json',
+      });
+      const text2: string = (data2 && data2.candidates && data2.candidates[0] && data2.candidates[0].content && data2.candidates[0].content.parts && data2.candidates[0].content.parts[0] && (data2.candidates[0].content.parts[0] as any).text) || '';
+      const finish2: string = (data2 && data2.candidates && data2.candidates[0] && (data2.candidates[0] as any).finishReason) || '';
+      logAI('[AI Eval] ultra-compact finishReason:', finish2);
+    const parsed2 = JSON.parse(extractJsonString(text2 || '{}'));
+      if (isValid(parsed2)) {
+        logAI('[AI Eval] ultra-compact retry success');
+        return parsed2;
+      }
+      logAIError('[AI Eval] ultra-compact retry invalid payload', parsed2);
+    } catch (e2) {
+      logAIError('[AI Eval] ultra-compact retry failed', e2);
+    }
+  }
+
+  // Fallback: best-effort extraction from text
+  const fb = tryExtractScoresFromText(text || '');
+  if (fb) {
+    logAI('[AI Eval] Using fallback extraction:', fb);
+    // Map legacy keys to new schema
+    return {
+      accuracy: fb.accuracy ?? 0,
+      completeness: fb.expertise ?? fb.completeness ?? 0,
+      fluency: fb.context ?? fb.fluency ?? 0,
+      summary: fb.summary,
+      tips: fb.tips,
+      details: fb.details,
+    };
+  }
+  return { accuracy: 0, expertise: 0, context: 0, summary: '평가 실패', tips: '모델 응답이 비정상입니다.', details: ['MAX_TOKENS 또는 빈 응답'] };
+}
+
+// 응급 처치 함수: JSON 파싱 실패 시 텍스트에서 점수 추출
+function tryExtractScoresFromText(text: string): any | null {
+  try {
+    // 1) 특정 패턴으로 점수 찾기 (accuracy:80, expertise:75 등)
+    const scorePatterns = {
+      accuracy: text.match(/(?:accuracy|정확도)["']?\s*[:=]?\s*(\d+)/i)?.[1],
+      expertise: text.match(/(?:expertise|전문성)["']?\s*[:=]?\s*(\d+)/i)?.[1],
+      context: text.match(/(?:context|문맥)["']?\s*[:=]?\s*(\d+)/i)?.[1]
+    };
+    
+    if (scorePatterns.accuracy || scorePatterns.expertise || scorePatterns.context) {
+      return {
+        accuracy: clamp100(parseInt(scorePatterns.accuracy ?? '0') || 0),
+        expertise: clamp100(parseInt(scorePatterns.expertise ?? '0') || 0),
+        context: clamp100(parseInt(scorePatterns.context ?? '0') || 0),
+        summary: '패턴 매칭으로 추출된 점수',
+        tips: '정확한 평가를 위해 네트워크 상태를 확인하세요.',
+        details: ['패턴 매칭 추출']
+      };
+    }
+    
+    // 2) 일반 숫자 패턴 찾기 (순서대로 첫 3개 숫자)
+    const numbers = text.match(/\d+/g);
+    if (numbers && numbers.length >= 3) {
+      const [acc, exp, ctx] = numbers.slice(0, 3).map((n: string) => parseInt(n));
+      // 점수 범위 검증 (0-100)
+      if (acc <= 100 && exp <= 100 && ctx <= 100) {
+        return {
+          accuracy: clamp100(acc),
+          expertise: clamp100(exp),
+          context: clamp100(ctx),
+          summary: '자동 추출된 점수',
+          tips: '정확한 평가를 위해 네트워크 상태를 확인하세요.',
+          details: ['숫자 순서 추출']
+        };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function clamp100(n: number): number {
+  if (typeof n !== 'number' || isNaN(n)) return 0;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
 
 // ===== 템플릿 기반 생성: 프롬프트 → JSON → HTML 바인딩 → 스크립트 병합 =====
-function buildTemplatePrompt(params: GeneratePPTParams): string {
+function buildTemplatePrompt(params: GeneratePPTParams & { language?: 'ko' | 'zh' }): string {
   const templateSequence = getTemplateSequence(params.slideCount);
   return `당신은 전문 프레젠테이션 컨설턴트입니다. 다음 구조로 ${params.slideCount}페이지 PPT를 생성해주세요.
 
 주제: ${params.topic}
 세부사항: ${params.details || '없음'}
 스타일: ${params.style}
+언어: ${params.language === 'zh' ? '중국어(간체)' : '한국어'} (모든 텍스트 필드는 지정 언어로 작성)
 템플릿 순서: ${templateSequence.join(' → ')}
 
 각 슬라이드별 요구사항:
@@ -703,6 +913,7 @@ async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise
     details: params.details,
     style: params.style,
     slideCount: params.slideCount,
+    language: params.language,
   } as GeneratePPTParams);
 
   const data = await callGemini(prompt, MODEL_NAME, {
@@ -749,26 +960,52 @@ async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise
       for (let idx = 1; idx <= 4; idx++) {
         const pk = `point${idx}`;
         const dk = `point${idx}Detail`;
-        if (!candidate[pk]) candidate[pk] = `포인트 ${idx}`;
-        if (!candidate[dk]) candidate[dk] = `${candidate[pk]} 상세 설명`;
+        if (!candidate[pk]) candidate[pk] = params.language === 'zh' ? `要点 ${idx}` : `포인트 ${idx}`;
+        if (!candidate[dk]) candidate[dk] = params.language === 'zh' ? `${candidate[pk]} 详细说明` : `${candidate[pk]} 상세 설명`;
       }
     }
+    // 언어 라벨 구성
+    const labelsByLang = {
+      ko: {
+        chartPlaceholder: '차트가 여기에 표시됩니다',
+        insightTitle1: '핵심 인사이트',
+        insightTitle2: '시장 동향',
+        insightTitle3: '전략적 제언',
+        keyAchievementsTitle: '핵심 성과',
+        valueBadge1: '혁신',
+        valueBadge2: '성장',
+        valueBadge3: '전략',
+      },
+      zh: {
+        chartPlaceholder: '图表将在此显示',
+        insightTitle1: '关键洞察',
+        insightTitle2: '市场趋势',
+        insightTitle3: '战略建议',
+        keyAchievementsTitle: '关键成果',
+        valueBadge1: '创新',
+        valueBadge2: '增长',
+        valueBadge3: '战略',
+      },
+    } as const;
+
+    const _labels = labelsByLang[params.language];
+
     // 데이터 보강: conclusion 핵심 통계 기본값
     if (templateType === 'conclusion') {
       // 포인트 1~3 기본 채움
       for (let idx = 1; idx <= 3; idx++) {
         const pk = `point${idx}`;
-        if (!candidate[pk]) candidate[pk] = `핵심 성과 ${idx}`;
+        if (!candidate[pk]) candidate[pk] = params.language === 'zh' ? `关键成果 ${idx}` : `핵심 성과 ${idx}`;
       }
       candidate.mainStat = candidate.mainStat || (candidate.stat1Value || '75%');
-      candidate.mainStatLabel = candidate.mainStatLabel || (candidate.stat1Label || '달성률');
+      candidate.mainStatLabel = candidate.mainStatLabel || (candidate.stat1Label || (params.language === 'zh' ? '达成率' : '달성률'));
       // 하단 통계 카드 3개 기본 채움
       if (!candidate.stat1Value) candidate.stat1Value = '75%';
-      if (!candidate.stat1Label) candidate.stat1Label = '달성률';
-      if (!candidate.stat2Value) candidate.stat2Value = '3년';
-      if (!candidate.stat2Label) candidate.stat2Label = '예상 기간';
+      if (!candidate.stat1Label) candidate.stat1Label = params.language === 'zh' ? '达成率' : '달성률';
+      if (!candidate.stat2Value) candidate.stat2Value = params.language === 'zh' ? '3年' : '3년';
+      if (!candidate.stat2Label) candidate.stat2Label = params.language === 'zh' ? '预计周期' : '예상 기간';
       if (!candidate.stat3Value) candidate.stat3Value = 'TOP3';
-      if (!candidate.stat3Label) candidate.stat3Label = '우선 순위';
+      if (!candidate.stat3Label) candidate.stat3Label = params.language === 'zh' ? '优先级' : '우선 순위';
       // stats 배열도 보강
       if (stats.length === 0) {
         stats.push(
@@ -780,9 +1017,9 @@ async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise
     }
     // 데이터 보강: chart 인사이트 기본값
     if (templateType === 'chart') {
-      if (!candidate.insight1) candidate.insight1 = '핵심 지표가 지속적인 상승 추세를 보이며 성장 가능성을 시사합니다.';
-      if (!candidate.insight2) candidate.insight2 = '시장 동향은 경쟁 심화와 함께 차별화 전략의 중요성을 강조합니다.';
-      if (!candidate.insight3) candidate.insight3 = '전략적으로 우선순위를 정하고 실행 로드맵을 수립해야 합니다.';
+      if (!candidate.insight1) candidate.insight1 = params.language === 'zh' ? '关键指标呈现持续上升趋势，表明增长潜力。' : '핵심 지표가 지속적인 상승 추세를 보이며 성장 가능성을 시사합니다.';
+      if (!candidate.insight2) candidate.insight2 = params.language === 'zh' ? '市场趋势显示竞争加剧，差异化策略的重要性不断提升。' : '시장 동향은 경쟁 심화와 함께 차별화 전략의 중요성을 강조합니다.';
+      if (!candidate.insight3) candidate.insight3 = params.language === 'zh' ? '需要制定优先级并落地执行路线图。' : '전략적으로 우선순위를 정하고 실행 로드맵을 수립해야 합니다.';
     }
 
     let chartType = candidate.chartType;
@@ -792,7 +1029,25 @@ async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise
       if (!chartData || !Array.isArray(chartData?.labels)) chartData = generateDefaultChartData(params.topic);
     }
 
-    const html = bindTemplateData({ ...candidate, templateType, points, stats });
+    // 템플릿 바인딩 시 언어 라벨 전달
+    let html = bindTemplateData({ ...candidate, templateType, points, stats, ..._labels, _labels });
+    // 안전망: 특정 한국어 고정 문구가 남아있을 경우 언어에 맞춰 치환
+    if (params.language === 'zh') {
+      html = html
+        .replace(/핵심 인사이트/g, '关键洞察')
+        .replace(/시장 동향/g, '市场趋势')
+        .replace(/전략적 제언/g, '战略建议')
+        .replace(/차트가 여기에 표시됩니다/g, '图表将在此显示')
+        .replace(/핵심 성과/g, '关键成果');
+    } else {
+      // ko: 보정(혹시 중국어가 섞였을 경우)
+      html = html
+        .replace(/关键洞察/g, '핵심 인사이트')
+        .replace(/市场趋势/g, '시장 동향')
+        .replace(/战略建议/g, '전략적 제언')
+        .replace(/图表将在此显示/g, '차트가 여기에 표시됩니다')
+        .replace(/关键成果/g, '핵심 성과');
+    }
 
     return {
       slideNumber: i + 1,
@@ -805,6 +1060,7 @@ async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise
       chartData,
       stats: stats.length > 0 ? stats : undefined,
       html,
+      _labels,
     };
   });
 

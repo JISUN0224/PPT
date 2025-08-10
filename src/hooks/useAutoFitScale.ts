@@ -27,8 +27,10 @@ export function useAutoFitScale(options?: UseAutoFitScaleOptions) {
     const ratioW = cw / sw;
     const ratioH = ch / sh;
     const next = Math.min(ratioW, ratioH, maxScale) * paddingRatio;
-    // avoid micro jitters
-    const rounded = Math.max(0.1, Math.min(1, Math.round(next * 1000) / 1000));
+    // 스케일이 거의 1이면(2% 이내) 가독성을 위해 1로 고정
+    const normalized = next > 0.98 && next <= 1.02 ? 1 : next;
+    // avoid micro jitters: 두 자리 소수로 라운드
+    const rounded = Math.max(0.1, Math.min(1, Math.round(normalized * 100) / 100));
     setScale(rounded);
   }, [maxScale, paddingRatio]);
 

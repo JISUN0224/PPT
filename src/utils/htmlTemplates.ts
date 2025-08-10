@@ -13,15 +13,15 @@ export const HTML_TEMPLATES = {
         <div style="margin-top: 40px; display: flex; gap: 20px;">
             <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 15px 25px; border-radius: 15px; box-shadow: var(--shadow-soft);">
                 <span style="font-size: 20px;">🎯</span>
-                <span style="margin-left: 10px; color: var(--primary-brown); font-weight: 600;">혁신</span>
+                <span style="margin-left: 10px; color: var(--primary-brown); font-weight: 600;">{{valueBadge1}}</span>
             </div>
             <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 15px 25px; border-radius: 15px; box-shadow: var(--shadow-soft);">
                 <span style="font-size: 20px;">🚀</span>
-                <span style="margin-left: 10px; color: var(--primary-brown); font-weight: 600;">성장</span>
+                <span style="margin-left: 10px; color: var(--primary-brown); font-weight: 600;">{{valueBadge2}}</span>
             </div>
             <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 15px 25px; border-radius: 15px; box-shadow: var(--shadow-soft);">
                 <span style="font-size: 20px;">💡</span>
-                <span style="margin-left: 10px; color: var(--primary-brown); font-weight: 600;">전략</span>
+                <span style="margin-left: 10px; color: var(--primary-brown); font-weight: 600;">{{valueBadge3}}</span>
             </div>
         </div>
     </div>`,
@@ -73,30 +73,30 @@ export const HTML_TEMPLATES = {
     <div style="height: 100%; padding: 35px 45px; display: flex; flex-direction: column; font-family: var(--font-body);">
         <h2 style="font-size: 36px; font-weight: 700; color: var(--primary-brown); text-align: center; margin-bottom: 25px;">{{title}}</h2>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; flex: 1; min-height: 0;">
-            <div class="chart-area" style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); height: auto; display: flex; align-items: center; justify-content: center; color: #666; font-style: italic;">
-                <div>차트가 여기에 표시됩니다</div>
+            <div class="chart-area" style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); height: auto; display: flex; align-items: center; justify-content: center; color: #000; font-style: italic;">
+                <div>{{chartPlaceholder}}</div>
             </div>
             <div style="display: flex; flex-direction: column; justify-content: space-between;">
                 <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 18px; margin-bottom: 15px; border-radius: 15px; box-shadow: var(--shadow-soft);">
-                    <h3 style="color: var(--primary-brown); margin-bottom: 12px; display: flex; align-items: center; font-size: 16px;">
+                    <h3 style="color: #000; margin-bottom: 12px; display: flex; align-items: center; font-size: 18px;">
                         <span style="margin-right: 8px;">📈</span>
-                        핵심 인사이트
+                        {{insightTitle1}}
                     </h3>
-                    <p style="color: #666; line-height: 1.5; font-size: 15px;">{{insight1}}</p>
+                    <p style="color: #000; line-height: 1.6; font-size: 17px;">{{insight1}}</p>
                 </div>
                 <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 18px; margin-bottom: 15px; border-radius: 15px; box-shadow: var(--shadow-soft);">
-                    <h3 style="color: var(--primary-brown); margin-bottom: 12px; display: flex; align-items: center; font-size: 16px;">
+                    <h3 style="color: #000; margin-bottom: 12px; display: flex; align-items: center; font-size: 18px;">
                         <span style="margin-right: 8px;">🎯</span>
-                        시장 동향
+                        {{insightTitle2}}
                     </h3>
-                    <p style="color: #666; line-height: 1.5; font-size: 15px;">{{insight2}}</p>
+                    <p style="color: #000; line-height: 1.6; font-size: 17px;">{{insight2}}</p>
                 </div>
                 <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 18px; border-radius: 15px; box-shadow: var(--shadow-soft);">
-                    <h3 style="color: var(--primary-brown); margin-bottom: 12px; display: flex; align-items: center; font-size: 16px;">
+                    <h3 style="color: #000; margin-bottom: 12px; display: flex; align-items: center; font-size: 18px;">
                         <span style="margin-right: 8px;">💡</span>
-                        전략적 제언
+                        {{insightTitle3}}
                     </h3>
-                    <p style="color: #666; line-height: 1.5; font-size: 15px;">{{insight3}}</p>
+                    <p style="color: #000; line-height: 1.6; font-size: 17px;">{{insight3}}</p>
                 </div>
             </div>
         </div>
@@ -154,7 +154,7 @@ export const HTML_TEMPLATES = {
         <div style="margin-bottom: 40px;">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px;">
                 <div style="flex: 1; margin-right: 20px;">
-                    <h3 style="color: #8B4513; margin-bottom: 20px; font-size: 24px;">핵심 성과</h3>
+                    <h3 style="color: #8B4513; margin-bottom: 20px; font-size: 24px;">{{keyAchievementsTitle}}</h3>
                     <ul style="list-style: none; padding: 0;">
                         <li style="margin-bottom: 15px; display: flex; align-items: center;">
                             <span style="width: 8px; height: 8px; background: #8B4513; border-radius: 50%; margin-right: 15px;"></span>
