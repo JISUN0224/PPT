@@ -79,9 +79,9 @@ const GeneratorPage: React.FC = () => {
     <div className={`min-h-screen bg-gradient-to-br from-[var(--background)] to-[var(--cream)] theme-${formData.style} ${langClass}`}>
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-12">
-           <h1 className="luxe-title mb-4 luxe-font-display">AI PPT 생성기</h1>
+           <h1 className="luxe-title mb-4 luxe-font-display">PPT 기반 AI 통역 트레이너</h1>
           <p className="luxe-subtitle">
-            주제만 입력하면 AI가 전문적인 프레젠테이션을 자동 생성합니다
+            스크립트 재생 → 내 통역 녹음 → AI 평가(Azure+Gemini). 정확도·완성도·자연스러움을 한눈에 확인하세요.
           </p>
         </div>
 
