@@ -13,12 +13,8 @@ const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 const MODEL_NAME = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || 'gemini-2.5-flash';
 const API_ENDPOINT_BASE = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-function logAI(...args: any[]) {
-  try { console.log('[AI]', ...args); } catch {}
-}
-function logAIError(...args: any[]) {
-  try { console.error('[AI]', ...args); } catch {}
-}
+function logAI(..._args: any[]) {}
+function logAIError(..._args: any[]) {}
 
 function ensureApiKeyPresent(): void {
   if (!API_KEY) {
@@ -157,23 +153,7 @@ async function callGemini(prompt: string, model: string, generationConfig: any):
   const um = data?.usageMetadata;
   if (um) logAI('Tokens', { prompt: um.promptTokenCount, total: um.totalTokenCount, thoughts: um.thoughtsTokenCount });
   // Deep debug for response structure (safe/truncated)
-  try {
-    (window as any).lastGeminiResponse = data;
-    const candidatesLen = Array.isArray(data?.candidates) ? data.candidates.length : 0;
-    const first = data?.candidates?.[0];
-    const finish = first?.finishReason;
-    const parts = first?.content?.parts;
-    const firstText = Array.isArray(parts)
-      ? (parts.map((p: any) => p?.text).filter(Boolean).join(' | ') || '')
-      : '';
-    console.log('=== GEMINI DEBUG ===');
-    console.log('[Gemini] candidates length:', candidatesLen);
-    console.log('[Gemini] first finishReason:', finish);
-    console.log('[Gemini] first parts len:', Array.isArray(parts) ? parts.length : 'n/a');
-    if (firstText) console.log('[Gemini] first text (joined, truncated):', String(firstText).slice(0, 500));
-    const truncated = JSON.stringify(data).slice(0, 2000);
-    console.log('[Gemini] full response (truncated 2k):', truncated);
-  } catch {}
+  // deep debug removed for production usage
   return data;
 }
 
@@ -910,7 +890,7 @@ async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise
   ensureApiKeyPresent();
   const prompt = buildTemplatePrompt({
     topic: params.topic,
-    details: params.details,
+    details: (params.details || '').slice(0, 600),
     style: params.style,
     slideCount: params.slideCount,
     language: params.language,

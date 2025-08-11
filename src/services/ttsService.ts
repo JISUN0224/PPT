@@ -114,12 +114,12 @@ export async function synthesizeSlideAudio(slide: any, language: 'ko' | 'zh', vo
   try {
     return await textToSpeech(text, language, voiceName);
   } catch (err) {
-    try { console.warn('[TTS] primary voice failed, falling back to default', { language, voiceName, err }); } catch {}
+    // trimmed: primary voice fallback log
     // Fallback: 기본 음성으로 재시도
     try {
       return await textToSpeech(text, language, undefined);
     } catch (err2) {
-      try { console.error('[TTS] fallback voice also failed', { language, err2 }); } catch {}
+      // trimmed: fallback voice also failed
       return null;
     }
   }

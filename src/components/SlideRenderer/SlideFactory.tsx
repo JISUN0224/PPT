@@ -132,10 +132,9 @@ const SlideFactory: React.FC<SlideFactoryProps> = ({ slide, slideNumber, totalSl
     if (plain.length < 5) {
       // 내용이 너무 적다면 폴백
       // eslint-disable-next-line no-console
-      console.warn('[SlideRenderer] AI html empty after sanitize. Falling back to templates.', { slideNumber });
+      // warn when AI html empty in development only
     } else {
-      // eslint-disable-next-line no-console
-      console.log('[SlideRenderer] Rendering AI HTML', { slideNumber, preview: safe.slice(0, 200) });
+      // minimal log removed
       // 차트 플레이스홀더가 있을 경우 실제 ChartRenderer를 삽입해 표시
       const { before, after, hasChart } = splitByChartArea(safe);
       if (hasChart && slide.type === 'chart') {

@@ -260,8 +260,7 @@ export const bindTemplateData = (slide: any): string => {
   });
   try {
     if (missing.length > 0) {
-      // eslint-disable-next-line no-console
-      console.warn('[TemplateBinding] Missing fields for tokens:', { templateType: slide?.templateType, missing });
+      // template binding warning trimmed
     }
   } catch {}
   return html;

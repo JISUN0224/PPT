@@ -19,6 +19,8 @@ const Home: React.FC = () => {
     slideCount: 2
   });
 
+  const detailsLength = formData.details?.length ?? 0;
+
   const handleGenerate = async () => {
     if (!formData.topic.trim()) return;
     
@@ -103,20 +105,24 @@ const Home: React.FC = () => {
                 label="주제"
                 value={formData.topic}
                 onChange={(value) => setFormData(prev => ({ ...prev, topic: value }))}
-                placeholder="프레젠테이션 주제를 입력하세요"
+                placeholder="PPT주제를 입력하세요. 예: 지구온난화, K-pop열풍, 금융 위기"
               />
               
-                             <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                   상세 설명(선택)
-                 </label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  상세 설명(선택)
+                </label>
                 <textarea
                   value={formData.details}
                   onChange={(e) => setFormData(prev => ({ ...prev, details: e.target.value }))}
-                  placeholder="추가적인 세부사항을 입력하세요"
+                  placeholder="추가적인 세부사항을 입력하세요. 최대 600자까지 입력 가능하며, 300자 이상부터는 길이에 따라 품질/속도에 영향이 있을 수 있습니다. 핵심 조건만 간결히 작성해 주세요 (예: 대상, 목적, 톤, 필수 키워드)."
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--primary-brown)] focus:border-transparent transition-colors duration-200"
                   rows={4}
+                  maxLength={600}
                 />
+                <div className={`mt-1 text-right text-xs ${detailsLength >= 600 ? 'text-red-600' : detailsLength >= 300 ? 'text-amber-600' : 'text-gray-500'}`}>
+                  {detailsLength}/600자
+                </div>
               </div>
               
               <div>
@@ -152,6 +158,10 @@ const Home: React.FC = () => {
                  </select>
                </div>
               
+              <div className="text-xs text-gray-500 -mt-2">
+                현재 생성되는 PPT의 수치·통계·인용은 예시이며 실제 데이터가 아니니, 의사결정 및 인용 시 주의하세요.
+              </div>
+
               <Button
                 onClick={handleGenerate}
                 disabled={isGenerating || !formData.topic.trim()}

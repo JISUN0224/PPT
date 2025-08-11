@@ -170,7 +170,7 @@ const PPTViewer: React.FC = () => {
       id: 'interpreter-record',
       title: '재생/녹음',
       description: '재생 버튼으로 AI 음성을 듣고, 마이크 버튼으로 녹음을 시작합니다. 정지 버튼으로 녹음을 종료해 인식 결과를 확인하세요.',
-      targetSelector: '[data-tour="interpreter"] [data-tour="ip-record"]',
+      targetSelector: '[data-tour="interpreter"] [data-tour="ip-opposite"] [data-tour="ip-record"]',
       padding: 8,
     },
   ];

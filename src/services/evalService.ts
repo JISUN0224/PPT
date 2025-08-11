@@ -3,12 +3,18 @@ import { evaluateContentWithAI } from './aiService';
 let SpeechSDK: any;
 try {
   SpeechSDK = await import('microsoft-cognitiveservices-speech-sdk');
-  try { console.log('🟢 [AZURE DEBUG] SDK loaded successfully'); } catch {}
-} catch (e) {
-  try { console.log('🟡 [AZURE DEBUG] SDK not available:', e); } catch {}
-}
+} catch {}
 
 export type LangCode = 'ko' | 'zh';
+
+export interface AzureWordDetail {
+  word: string;
+  accuracy: number;
+  errorType?: string;
+  offsetMs?: number;
+  durationMs?: number;
+  phonemes?: Array<{ phoneme: string; accuracy?: number }>;
+}
 
 export interface PronunciationScores {
   accuracy: number;
@@ -16,6 +22,8 @@ export interface PronunciationScores {
   prosody?: number;
   completeness?: number;
   source?: 'azure' | 'heuristic';
+  words?: AzureWordDetail[];
+  longPauses?: Array<{ startMs: number; durationMs: number }>;
 }
 
 export interface ContentScores {
@@ -92,30 +100,33 @@ async function convertToWav(input: Blob): Promise<Blob> {
     h.setUint32(36, 0x64617461, false); // 'data'
     h.setUint32(40, pcm.byteLength, true);
     const wav = new Blob([header, pcm], { type: 'audio/wav' });
-    try { console.debug('[Eval][Azure] WAV converted', { inType: input.type, outType: wav.type, samples: ch.length, sampleRate }); } catch {}
+    // debug trimmed
     return wav;
   } catch (e) {
-    try { console.warn('[Eval][Azure] WAV convert failed, using original', e); } catch {}
+    // debug trimmed
     return input;
   }
 }
 
-async function tryAzurePronunciationAssessment(_audio: Blob, referenceText: string, language: LangCode): Promise<PronunciationScores | null> {
+async function tryAzureUnscriptedPronunciationAssessment(_audio: Blob, language: LangCode): Promise<PronunciationScores | null> {
   const key = import.meta.env.VITE_AZURE_SPEECH_KEY as string | undefined;
   const region = import.meta.env.VITE_AZURE_SPEECH_REGION as string | undefined;
   if (!key || !region || !SpeechSDK) return null;
   try {
-    console.log('🔵 [AZURE DEBUG] SDK microphone path');
+    // console debug trimmed in production usage
     const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(key, region);
     speechConfig.speechRecognitionLanguage = languageToAzureLocale(language);
-    const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+    // Use recorded audio rather than live mic. Convert to WAV for SDK compatibility.
+    const wav = await convertToWav(_audio);
+    const file = new File([wav], 'recording.wav', { type: 'audio/wav' });
+    const audioConfig = SpeechSDK.AudioConfig.fromWavFileInput(file);
     const paConfig = new SpeechSDK.PronunciationAssessmentConfig(
-      referenceText,
+      '',
       SpeechSDK.PronunciationAssessmentGradingSystem.HundredMark,
-      SpeechSDK.PronunciationAssessmentGranularity.Phoneme,
-      true
+      SpeechSDK.PronunciationAssessmentGranularity.Word,
+      false
     );
-    paConfig.enableProsodyAssessment = true;
+    try { paConfig.phonemeAlphabet = SpeechSDK.PronunciationAssessmentPhonemeAlphabet.IPA; } catch {}
     const recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
     paConfig.applyTo(recognizer);
     const result: any = await new Promise((resolve) => {
@@ -125,16 +136,46 @@ async function tryAzurePronunciationAssessment(_audio: Blob, referenceText: stri
     if (result?.errorDetails) throw new Error(result.errorDetails);
     const detailJson = result?.properties?.getProperty(SpeechSDK.PropertyId.SpeechServiceResponse_JsonResult);
     const data = detailJson ? JSON.parse(detailJson) : {};
-    const pa = data?.NBest?.[0]?.PronunciationAssessment || data?.PronunciationAssessment || {};
+    const nbest = data?.NBest?.[0] || {};
+    const pa = nbest?.PronunciationAssessment || data?.PronunciationAssessment || {};
+    // Words with timing in 100-ns units -> ms
+    const rawWords: any[] = Array.isArray(nbest?.Words) ? nbest.Words : [];
+    const words: AzureWordDetail[] = rawWords.map((w: any) => {
+      const wpa = w?.PronunciationAssessment || {};
+      return {
+        word: String(w?.Word ?? w?.word ?? ''),
+        accuracy: clamp100(wpa?.AccuracyScore ?? wpa?.Accuracy ?? 0),
+        errorType: wpa?.ErrorType || w?.ErrorType,
+        offsetMs: typeof w?.Offset === 'number' ? Math.round(w.Offset / 10000) : undefined,
+        durationMs: typeof w?.Duration === 'number' ? Math.round(w.Duration / 10000) : undefined,
+        phonemes: Array.isArray(w?.Syllables)
+          ? ([] as any[]).concat(...w.Syllables.map((s: any) => Array.isArray(s?.Phonemes) ? s.Phonemes : [])).map((p: any) => ({
+              phoneme: String(p?.Phoneme || p?.phoneme || ''),
+              accuracy: clamp100(p?.AccuracyScore ?? p?.Accuracy ?? 0),
+            }))
+          : undefined,
+      } as AzureWordDetail;
+    });
+    // Long pauses from gaps between word end and next word start
+    // Long pauses from gaps between word end and next word start (client-side prosody hint)
+    const pauses: Array<{ startMs: number; durationMs: number; beforeWord?: string; afterWord?: string }> = [];
+    for (let i = 0; i < words.length - 1; i++) {
+      const curEnd = (words[i].offsetMs ?? 0) + (words[i].durationMs ?? 0);
+      const nextStart = words[i + 1].offsetMs ?? curEnd;
+      const gap = nextStart - curEnd;
+      if (gap >= 500) {
+        pauses.push({ startMs: curEnd, durationMs: gap, beforeWord: words[i].word, afterWord: words[i + 1].word });
+      }
+    }
     return {
       accuracy: clamp100(pa?.AccuracyScore ?? pa?.Accuracy ?? 0),
       fluency: clamp100(pa?.FluencyScore ?? pa?.Fluency ?? 0),
-      prosody: pa?.ProsodyScore != null ? clamp100(pa.ProsodyScore) : undefined,
-      completeness: clamp100(pa?.CompletenessScore ?? pa?.Completeness ?? 0),
       source: 'azure',
+      words,
+      longPauses: pauses,
     };
   } catch (e) {
-    try { console.log('🔴 [AZURE DEBUG] SDK microphone path failed:', e); } catch {}
+    // swallow detailed logs; return null to fallback
     return null;
   }
 }
@@ -152,24 +193,12 @@ function heuristicPronunciationFromText(hypo: string, ref: string): Pronunciatio
   return { accuracy: clamp100(acc), fluency: clamp100(flu * 0.9), prosody: clamp100(flu * 0.85), completeness: clamp100((h.length / r.length) * 100), source: 'heuristic' };
 }
 
-export async function evaluatePronunciation(audio: Blob | null, recognizedText: string, referenceText: string, language: LangCode): Promise<PronunciationScores> {
-  try {
-    console.log('🔵 [EVAL DEBUG] evaluatePronunciation called:', {
-      hasAudio: !!audio,
-      recognizedTextLength: (recognizedText || '').length,
-      referenceTextLength: (referenceText || '').length,
-      language,
-    });
-  } catch {}
+export async function evaluatePronunciation(audio: Blob | null, recognizedText: string, language: LangCode): Promise<PronunciationScores> {
   if (audio) {
-    try { console.log('🔵 [EVAL DEBUG] Audio exists, calling Azure assessment'); } catch {}
-    const azure = await tryAzurePronunciationAssessment(audio, referenceText, language);
+    const azure = await tryAzureUnscriptedPronunciationAssessment(audio, language);
     if (azure) return azure;
-    try { console.log('🔴 [EVAL DEBUG] Azure failed, using heuristic'); } catch {}
-  } else {
-    try { console.log('🔴 [EVAL DEBUG] No audio, using heuristic'); } catch {}
   }
-  return heuristicPronunciationFromText(recognizedText, referenceText);
+  return heuristicPronunciationFromText(recognizedText, recognizedText);
 }
 
 export async function evaluateContent(recognizedText: string, referenceText: string, language: LangCode): Promise<ContentScores> {
