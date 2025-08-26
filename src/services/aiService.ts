@@ -13,8 +13,45 @@ const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 const MODEL_NAME = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || 'gemini-2.5-flash';
 const API_ENDPOINT_BASE = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-function logAI(..._args: any[]) {}
-function logAIError(..._args: any[]) {}
+// 모델 우선순위 설정 (할당량 소진 시 자동 우회)
+const PPT_MODEL_FALLBACKS = [
+  'gemini-2.5-flash-lite', // 1순위: 기본 모델 (저렴하고 빠름)
+  'gemini-2.5-flash',      // 2순위: 할당량 소진 시
+  'gemini-2.0-flash'       // 3순위: 최후 수단
+];
+
+const EVAL_MODEL_FALLBACKS = [
+  'gemini-2.5-flash-lite', // 1순위: 기본 평가 모델 (저렴하고 빠름)
+  'gemini-1.5-flash',      // 2순위: 안정적인 대안
+  'gemini-2.0-flash'       // 3순위: 최후 수단
+];
+
+function logAI(...args: any[]) {
+  // 배포 환경에서도 로그 표시 (개발자 도구에서 확인 가능)
+  console.log('[AI]', ...args);
+  
+  // 배포 환경에서도 모델 사용 정보를 명확히 표시
+  if (args[0] === 'Request Gemini') {
+    console.log(`🚀 [AI Model] Using: ${args[1]?.model || 'unknown'}`);
+  }
+  if (args[0] === '✅ Successfully used fallback model:') {
+    console.log(`🔄 [AI Model] Fallback: ${args[1]}`);
+  }
+  if (args[0] === '✅ Using primary model:') {
+    console.log(`🎯 [AI Model] Primary: ${args[1]}`);
+  }
+}
+
+function logAIError(...args: any[]) {
+  // 배포 환경에서도 오류 로그 표시
+  console.warn('[AI Error]', ...args);
+  console.error('[AI Error Details]', ...args);
+  
+  // 오류 발생 시 추가 정보 표시
+  if (args[0] && typeof args[0] === 'string' && args[0].includes('JSON parse error')) {
+    console.error('🔍 [AI Debug] JSON 파싱 오류 발생 - 원본 텍스트 확인 필요');
+  }
+}
 
 function ensureApiKeyPresent(): void {
   if (!API_KEY) {
@@ -131,30 +168,69 @@ Schema:{title,slides:[{slideNumber,type,title,subtitle?,content?,points?,chartTy
 }
 void buildCompactPrompt;
 
-async function callGemini(prompt: string, model: string, generationConfig: any): Promise<any> {
-  const endpoint = `${API_ENDPOINT_BASE(model)}?key=${API_KEY ?? ''}`;
-  logAI('Request Gemini', { model, endpoint });
-  logAI('Prompt Preview', prompt.slice(0, 800));
+async function callGemini(prompt: string, model: string, generationConfig: any, fallbackModels?: string[]): Promise<any> {
+  const modelsToTry = fallbackModels || [model];
+  
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const currentModel = modelsToTry[i];
+    const endpoint = `${API_ENDPOINT_BASE(currentModel)}?key=${API_KEY ?? ''}`;
+    
+    try {
+      logAI('Request Gemini', { model: currentModel, endpoint, attempt: i + 1 });
+      logAI('Prompt Preview', prompt.slice(0, 800));
 
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig }),
-  });
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig }),
+      });
 
-  logAI('Response status', res.status, res.statusText);
-  if (!res.ok) {
-    const t = await res.text();
-    logAIError('Error body', t.slice(0, 2000));
-    throw new Error(`Gemini API 오류: ${res.status} ${res.statusText} - ${t}`);
+      logAI('Response status', res.status, res.statusText);
+      
+      if (!res.ok) {
+        const t = await res.text();
+        logAIError('Error body', t.slice(0, 2000));
+        
+        // 할당량 소진 또는 모델 사용 불가 시 다음 모델 시도
+        if (res.status === 429 || res.status === 403 || t.includes('quota') || t.includes('rate limit')) {
+          if (i < modelsToTry.length - 1) {
+            logAI(`🚨 Model ${currentModel} quota exceeded! Trying next model: ${modelsToTry[i + 1]}`);
+            continue;
+          } else {
+            logAIError(`❌ All models exhausted. Last error: ${res.status} ${res.statusText}`);
+          }
+        }
+        
+        throw new Error(`Gemini API 오류: ${res.status} ${res.statusText} - ${t}`);
+      }
+      
+      const data = await res.json();
+      logAI('Raw keys', Object.keys(data || {}));
+      const um = data?.usageMetadata;
+      if (um) logAI('Tokens', { prompt: um.promptTokenCount, total: um.totalTokenCount, thoughts: um.thoughtsTokenCount });
+      
+      // 성공 시 사용된 모델 로그
+      if (i > 0) {
+        logAI(`✅ Successfully used fallback model: ${currentModel} (original: ${model})`);
+        console.log(`🔄 [AI Model] Fallback used: ${currentModel} (original: ${model})`);
+      } else {
+        logAI(`✅ Using primary model: ${currentModel}`);
+        console.log(`🎯 [AI Model] Primary used: ${currentModel}`);
+      }
+      
+      return data;
+      
+    } catch (error) {
+      // 네트워크 오류나 기타 예외 시에도 다음 모델 시도
+      if (i < modelsToTry.length - 1) {
+        logAIError(`Model ${currentModel} failed, trying next model: ${modelsToTry[i + 1]}`, error);
+        continue;
+      }
+      throw error;
+    }
   }
-  const data = await res.json();
-  logAI('Raw keys', Object.keys(data || {}));
-  const um = data?.usageMetadata;
-  if (um) logAI('Tokens', { prompt: um.promptTokenCount, total: um.totalTokenCount, thoughts: um.thoughtsTokenCount });
-  // Deep debug for response structure (safe/truncated)
-  // deep debug removed for production usage
-  return data;
+  
+  throw new Error(`모든 모델 시도 실패: ${modelsToTry.join(', ')}`);
 }
 
 function extractJsonString(text: string): string {
@@ -244,13 +320,14 @@ function extractJsonString(text: string): string {
   const first = text.indexOf('{');
   const last = text.lastIndexOf('}');
   if (first !== -1 && last !== -1 && last > first) {
-    const slice = text.slice(first, last + 1).trim();
+    const candidate = text.slice(first, last + 1).trim();
     try { 
-      JSON.parse(slice); 
-      return slice; 
+      JSON.parse(candidate); 
+      return candidate; 
     } catch {}
   }
   
+  // 8) Emergency fallback: return original text for partial extraction
   return text;
 }
 
@@ -523,10 +600,33 @@ export async function generatePPTStructure(params: GeneratePPTParamsLocal): Prom
     topK: 40,
     maxOutputTokens: getMaxTokens(params.slideCount),
     responseMimeType: 'application/json',
-  });
+  }, PPT_MODEL_FALLBACKS);
   let text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   if (!text) throw new Error('구조 생성 응답이 비어 있습니다.');
-  let parsed = JSON.parse(extractJsonString(text));
+  
+  console.log('📄 [PPT Generation] Raw response received');
+  console.log('📄 [PPT Generation] Response length:', text.length);
+  
+  let parsed: any;
+  try {
+    parsed = JSON.parse(extractJsonString(text));
+    console.log('✅ [PPT Generation] JSON parsing successful');
+  } catch (error) {
+    console.error('❌ [PPT Generation] JSON parse error:', error);
+    console.error('📄 [PPT Generation] Raw text (first 500 chars):', text.slice(0, 500));
+    logAIError('PPT Structure JSON parse error:', error);
+    logAIError('Raw text:', text);
+    // Fallback: create basic structure
+    parsed = {
+      title: params.topic,
+      slides: Array.from({ length: params.slideCount }, (_, i) => ({
+        slideNumber: i + 1,
+        type: i === 0 ? 'title' : i === params.slideCount - 1 ? 'conclusion' : 'content',
+        title: i === 0 ? params.topic : `슬라이드 ${i + 1}`,
+        content: '내용을 생성하는 중 오류가 발생했습니다.'
+      }))
+    };
+  }
   parsed = normalizePPT(parsed, params.slideCount);
 
   const emptyCount = countEmptyHtmlSlides(parsed);
@@ -541,10 +641,16 @@ export async function generatePPTStructure(params: GeneratePPTParamsLocal): Prom
       topK: 40,
       maxOutputTokens: getMaxTokens(params.slideCount),
       responseMimeType: 'application/json',
-    });
+    }, PPT_MODEL_FALLBACKS);
     text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     if (text) {
-      let parsed2 = JSON.parse(extractJsonString(text));
+      let parsed2: any;
+      try {
+        parsed2 = JSON.parse(extractJsonString(text));
+      } catch (error) {
+        logAIError('PPT Structure fallback JSON parse error:', error);
+        parsed2 = { slides: [] };
+      }
       parsed2 = normalizePPT(parsed2, params.slideCount);
       const merged = { ...parsed };
       merged.slides = merged.slides.map((s: any, i: number) => {
@@ -607,11 +713,19 @@ Schema:
     topK: 40,
     maxOutputTokens: 4096,
     responseMimeType: 'application/json',
-  });
+  }, PPT_MODEL_FALLBACKS);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   if (!text) throw new Error('스크립트 생성 응답이 비어 있습니다.');
-  const jsonStr = extractJsonString(text);
-  return JSON.parse(jsonStr);
+  
+  try {
+    const jsonStr = extractJsonString(text);
+    return JSON.parse(jsonStr);
+  } catch (error) {
+    logAIError('PPT Scripts JSON parse error:', error);
+    logAIError('Raw text:', text);
+    // Fallback: return empty scripts
+    return { slides: [] };
+  }
 }
 
 export function mergePPTData(structure: any, scripts: any, language: 'ko' | 'zh'): any {
@@ -664,7 +778,7 @@ export async function evaluateContentWithAI(args: { reference: string; hypothesi
     topK: 40,
     maxOutputTokens: 256,
     responseMimeType: 'application/json',
-  });
+  }, EVAL_MODEL_FALLBACKS);
   const finish = data?.candidates?.[0]?.finishReason;
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
@@ -699,19 +813,26 @@ export async function evaluateContentWithAI(args: { reference: string; hypothesi
       return parsed;
     }
   } catch {}
+  
+  // Try to extract partial JSON from truncated response
+  const partialResult = tryExtractPartialJSON(text || '');
+  if (partialResult) {
+    logAI('Using partial JSON extraction:', partialResult);
+    return partialResult;
+  }
 
   // Retry when truncated / token limit
   if (finish === 'MAX_TOKENS' || !text) {
     logAI('Token limit or empty parts. Retrying with ultra-compact prompt and higher tokens.');
-    const ultra = `JSON ONLY. L=${langName}. R=${ref.slice(0, 200)} H=${hyp.slice(0, 200)} S={"accuracy":number,"completeness":number,"fluency":number,"summary":string,"tips":string,"details":string[]}`;
+    const ultra = `JSON ONLY. L=${langName}. R=${ref.slice(0, 100)} H=${hyp.slice(0, 100)} S={"accuracy":number,"completeness":number,"fluency":number,"summary":"한줄평가","tips":"개선점"}`;
     try {
       const data2 = await callGemini(ultra, EVAL_MODEL, {
         temperature: 0.15,
         topP: 0.9,
         topK: 40,
-        maxOutputTokens: 64,
+        maxOutputTokens: 256,
         responseMimeType: 'application/json',
-      });
+      }, EVAL_MODEL_FALLBACKS);
       const text2: string = (data2 && data2.candidates && data2.candidates[0] && data2.candidates[0].content && data2.candidates[0].content.parts && data2.candidates[0].content.parts[0] && (data2.candidates[0].content.parts[0] as any).text) || '';
       const finish2: string = (data2 && data2.candidates && data2.candidates[0] && (data2.candidates[0] as any).finishReason) || '';
       logAI('[AI Eval] ultra-compact finishReason:', finish2);
@@ -737,27 +858,86 @@ export async function evaluateContentWithAI(args: { reference: string; hypothesi
       fluency: fb.context ?? fb.fluency ?? 0,
       summary: fb.summary,
       tips: fb.tips,
-      details: fb.details,
+      details: fb.details || ['패턴 매칭 추출'],
     };
   }
-  return { accuracy: 0, expertise: 0, context: 0, summary: '평가 실패', tips: '모델 응답이 비정상입니다.', details: ['MAX_TOKENS 또는 빈 응답'] };
+  return { accuracy: 0, completeness: 0, fluency: 0, summary: '평가 실패', tips: '모델 응답이 비정상입니다.', details: ['MAX_TOKENS 또는 빈 응답'] };
+}
+
+// 부분 JSON 추출 함수: 중간에 잘린 JSON에서 완전한 필드만 추출
+function tryExtractPartialJSON(text: string): any | null {
+  try {
+    // JSON이 중간에 잘린 경우, 완전한 필드만 추출
+    const trimmed = text.trim();
+    if (!trimmed.startsWith('{')) return null;
+    
+    // 완전한 필드들을 찾아서 객체 구성
+    const result: any = {};
+    
+    // accuracy 추출
+    const accuracyMatch = trimmed.match(/"accuracy"\s*:\s*(\d+)/);
+    if (accuracyMatch) result.accuracy = clamp100(parseInt(accuracyMatch[1]));
+    
+    // completeness 추출
+    const completenessMatch = trimmed.match(/"completeness"\s*:\s*(\d+)/);
+    if (completenessMatch) result.completeness = clamp100(parseInt(completenessMatch[1]));
+    
+    // fluency 추출
+    const fluencyMatch = trimmed.match(/"fluency"\s*:\s*(\d+)/);
+    if (fluencyMatch) result.fluency = clamp100(parseInt(fluencyMatch[1]));
+    
+    // summary 추출 (따옴표로 둘러싸인 문자열)
+    const summaryMatch = trimmed.match(/"summary"\s*:\s*"([^"]+)"/);
+    if (summaryMatch) result.summary = summaryMatch[1];
+    
+    // tips 추출
+    const tipsMatch = trimmed.match(/"tips"\s*:\s*"([^"]+)"/);
+    if (tipsMatch) result.tips = tipsMatch[1];
+    
+    // details 배열 추출 (완전한 항목만)
+    const detailsMatch = trimmed.match(/"details"\s*:\s*\[([^\]]*)\]/);
+    if (detailsMatch) {
+      const detailsText = detailsMatch[1];
+      // 완전한 문자열 항목들만 추출
+      const detailItems = detailsText.match(/"([^"]+)"/g);
+      if (detailItems) {
+        result.details = detailItems.map((item: string) => item.slice(1, -1)); // 따옴표 제거
+      }
+    }
+    
+    // 최소한 accuracy, completeness, fluency가 있으면 유효한 결과로 간주
+    if (result.accuracy !== undefined && result.completeness !== undefined && result.fluency !== undefined) {
+      return {
+        accuracy: result.accuracy,
+        completeness: result.completeness,
+        fluency: result.fluency,
+        summary: result.summary || '부분 추출된 평가',
+        tips: result.tips || '완전한 평가를 위해 다시 시도해보세요.',
+        details: result.details || ['부분 추출'],
+      };
+    }
+  } catch {}
+  return null;
 }
 
 // 응급 처치 함수: JSON 파싱 실패 시 텍스트에서 점수 추출
 function tryExtractScoresFromText(text: string): any | null {
   try {
-    // 1) 특정 패턴으로 점수 찾기 (accuracy:80, expertise:75 등)
+    // 1) 특정 패턴으로 점수 찾기 (accuracy:80, completeness:75, fluency:85 등)
     const scorePatterns = {
       accuracy: text.match(/(?:accuracy|정확도)["']?\s*[:=]?\s*(\d+)/i)?.[1],
+      completeness: text.match(/(?:completeness|완성도)["']?\s*[:=]?\s*(\d+)/i)?.[1],
+      fluency: text.match(/(?:fluency|자연스러움)["']?\s*[:=]?\s*(\d+)/i)?.[1],
+      // 구 스키마 호환성 (expertise → completeness, context → fluency)
       expertise: text.match(/(?:expertise|전문성)["']?\s*[:=]?\s*(\d+)/i)?.[1],
       context: text.match(/(?:context|문맥)["']?\s*[:=]?\s*(\d+)/i)?.[1]
     };
     
-    if (scorePatterns.accuracy || scorePatterns.expertise || scorePatterns.context) {
+    if (scorePatterns.accuracy || scorePatterns.completeness || scorePatterns.fluency || scorePatterns.expertise || scorePatterns.context) {
       return {
         accuracy: clamp100(parseInt(scorePatterns.accuracy ?? '0') || 0),
-        expertise: clamp100(parseInt(scorePatterns.expertise ?? '0') || 0),
-        context: clamp100(parseInt(scorePatterns.context ?? '0') || 0),
+        completeness: clamp100(parseInt(scorePatterns.completeness ?? scorePatterns.expertise ?? '0') || 0),
+        fluency: clamp100(parseInt(scorePatterns.fluency ?? scorePatterns.context ?? '0') || 0),
         summary: '패턴 매칭으로 추출된 점수',
         tips: '정확한 평가를 위해 네트워크 상태를 확인하세요.',
         details: ['패턴 매칭 추출']
@@ -767,13 +947,13 @@ function tryExtractScoresFromText(text: string): any | null {
     // 2) 일반 숫자 패턴 찾기 (순서대로 첫 3개 숫자)
     const numbers = text.match(/\d+/g);
     if (numbers && numbers.length >= 3) {
-      const [acc, exp, ctx] = numbers.slice(0, 3).map((n: string) => parseInt(n));
+      const [acc, comp, flu] = numbers.slice(0, 3).map((n: string) => parseInt(n));
       // 점수 범위 검증 (0-100)
-      if (acc <= 100 && exp <= 100 && ctx <= 100) {
+      if (acc <= 100 && comp <= 100 && flu <= 100) {
         return {
           accuracy: clamp100(acc),
-          expertise: clamp100(exp),
-          context: clamp100(ctx),
+          completeness: clamp100(comp),
+          fluency: clamp100(flu),
           summary: '자동 추출된 점수',
           tips: '정확한 평가를 위해 네트워크 상태를 확인하세요.',
           details: ['숫자 순서 추출']
@@ -902,7 +1082,7 @@ async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise
     topK: 40,
     maxOutputTokens: getMaxTokens(params.slideCount),
     responseMimeType: 'application/json',
-  });
+  }, PPT_MODEL_FALLBACKS);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   if (!text) throw new Error('템플릿 기반 응답이 비어 있습니다.');
   const parsed = JSON.parse(extractJsonString(text));

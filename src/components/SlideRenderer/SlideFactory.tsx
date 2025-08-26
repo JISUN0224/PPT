@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAutoFitScale } from '../../hooks/useAutoFitScale';
-import { TitleSlide, ContentSlide, ChartSlide, ComparisonSlide, ConclusionSlide } from './SlideTemplates';
+import { ContentSlide, ComparisonSlide } from './SlideTemplates';
 import ChartRenderer from './ChartRenderer';
 import type { SlideData } from './SlideTemplates';
 import { 
@@ -125,8 +125,8 @@ function splitByChartArea(html: string): { before: string; after: string; hasCha
 
 const SlideFactory: React.FC<SlideFactoryProps> = ({ slide, slideNumber, totalSlides }) => {
   // 1) AI가 제공한 HTML이 있으면 직접 렌더링 (권장 경로)
-  if (typeof slide.html === 'string' && slide.html.trim().length > 0) {
-    let htmlToRender = fillHtmlTemplate(slide.html, slide);
+  if (typeof (slide as any).html === 'string' && (slide as any).html.trim().length > 0) {
+    let htmlToRender = fillHtmlTemplate((slide as any).html, slide);
     const safe = sanitizeHtml(htmlToRender);
     const plain = stripTags(safe);
     if (plain.length < 5) {

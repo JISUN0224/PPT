@@ -43,7 +43,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({ chartType = 'bar', chartD
     },
   };
 
-  const style = { width: '100%', height: '100%' } as const;
+  // const style = { width: '100%', height: '100%' } as const;
 
   switch (chartType) {
     case 'line':

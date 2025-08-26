@@ -352,8 +352,8 @@ const InterpreterPanel: React.FC<InterpreterPanelProps> = ({ language, slide, sl
 
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
-            <h4 className="font-semibold text-blue-800">내 통역 (녹음 인식 결과)</h4>
-            <div className="flex items-center gap-2">
+            <h4 className="font-semibold text-blue-800">내 통역</h4>
+            <div className="flex items-center gap-1">
               <Button variant="outline" size="sm" onClick={handleToggleRecordedPlayback} disabled={!recordedAudioUrl} title="방금 녹음한 내 통역을 재생합니다.">
                 {isRecordedPlaying ? <Pause size={16} /> : <Play size={16} />}
               </Button>

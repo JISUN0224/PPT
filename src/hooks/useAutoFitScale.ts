@@ -35,7 +35,8 @@ export function useAutoFitScale(options?: UseAutoFitScaleOptions) {
   }, [maxScale, paddingRatio]);
 
   useEffect(() => {
-    const ro = new (window as any).ResizeObserver?.(() => recalc());
+    const ResizeObserver = (window as any).ResizeObserver;
+    const ro = ResizeObserver ? new ResizeObserver(() => recalc()) : null;
     if (containerRef.current && ro) ro.observe(containerRef.current);
     if (contentRef.current && ro) ro.observe(contentRef.current);
     window.addEventListener('resize', recalc);

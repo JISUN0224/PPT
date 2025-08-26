@@ -81,7 +81,7 @@ const Tour: React.FC<TourProps> = ({ steps, visible, onClose }) => {
   return (
     <div className="fixed inset-0 z-[1000]">
       {/* Dim background */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={() => onClose()} />
 
       {/* Highlight box */}
       {rect && (
