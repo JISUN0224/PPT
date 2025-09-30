@@ -70,28 +70,28 @@ export const HTML_TEMPLATES = {
     </div>`,
 
   chart: `
-    <div style="height: 100%; padding: 35px 45px; display: flex; flex-direction: column; font-family: var(--font-body);">
+    <div style="height: 100%; padding: 25px 40px; display: flex; flex-direction: column; font-family: var(--font-body);">
         <h2 style="font-size: 36px; font-weight: 700; color: var(--primary-brown); text-align: center; margin-bottom: 25px;">{{title}}</h2>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; flex: 1; min-height: 0;">
-            <div class="chart-area" style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); height: auto; display: flex; align-items: center; justify-content: center; color: #000; font-style: italic;">
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 25px; flex: 1; min-height: 0;">
+            <div class="chart-area" style="background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); height: auto; display: flex; align-items: center; justify-content: center; color: #000; font-style: italic;">
                 <div>{{chartPlaceholder}}</div>
             </div>
             <div style="display: flex; flex-direction: column; justify-content: space-between;">
-                <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 18px; margin-bottom: 15px; border-radius: 15px; box-shadow: var(--shadow-soft);">
+                <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 20px; margin-bottom: 15px; border-radius: 15px; box-shadow: var(--shadow-soft);">
                     <h3 style="color: #000; margin-bottom: 12px; display: flex; align-items: center; font-size: 18px;">
                         <span style="margin-right: 8px;">📈</span>
                         {{insightTitle1}}
                     </h3>
                     <p style="color: #000; line-height: 1.6; font-size: 17px;">{{insight1}}</p>
                 </div>
-                <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 18px; margin-bottom: 15px; border-radius: 15px; box-shadow: var(--shadow-soft);">
+                <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 20px; margin-bottom: 15px; border-radius: 15px; box-shadow: var(--shadow-soft);">
                     <h3 style="color: #000; margin-bottom: 12px; display: flex; align-items: center; font-size: 18px;">
                         <span style="margin-right: 8px;">🎯</span>
                         {{insightTitle2}}
                     </h3>
                     <p style="color: #000; line-height: 1.6; font-size: 17px;">{{insight2}}</p>
                 </div>
-                <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 18px; border-radius: 15px; box-shadow: var(--shadow-soft);">
+                <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 20px; border-radius: 15px; box-shadow: var(--shadow-soft);">
                     <h3 style="color: #000; margin-bottom: 12px; display: flex; align-items: center; font-size: 18px;">
                         <span style="margin-right: 8px;">💡</span>
                         {{insightTitle3}}
@@ -149,45 +149,45 @@ export const HTML_TEMPLATES = {
     </div>`,
 
   conclusion: `
-    <div style="height: 100%; padding: 40px 50px; font-family: var(--font-body);">
-        <h2 style="font-size: 36px; font-weight: 700; color: var(--primary-brown); text-align: center; margin-bottom: 30px;">{{title}}</h2>
-        <div style="margin-bottom: 40px;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px;">
-                <div style="flex: 1; margin-right: 20px;">
-                    <h3 style="color: #8B4513; margin-bottom: 20px; font-size: 24px;">{{keyAchievementsTitle}}</h3>
+    <div style="height: 100%; padding: 25px 40px; font-family: var(--font-body);">
+        <h2 style="font-size: 42px; font-weight: 700; color: var(--primary-brown); text-align: center; margin-bottom: 35px;">{{title}}</h2>
+        <div style="margin-bottom: 35px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 35px;">
+                <div style="flex: 1; margin-right: 25px;">
+                    <h3 style="color: #8B4513; margin-bottom: 25px; font-size: 28px;">{{keyAchievementsTitle}}</h3>
                     <ul style="list-style: none; padding: 0;">
-                        <li style="margin-bottom: 15px; display: flex; align-items: center;">
-                            <span style="width: 8px; height: 8px; background: #8B4513; border-radius: 50%; margin-right: 15px;"></span>
-                            <span style="color: #555; font-size: 16px;">{{point1}}</span>
+                        <li style="margin-bottom: 20px; display: flex; align-items: center;">
+                            <span style="width: 12px; height: 12px; background: #8B4513; border-radius: 50%; margin-right: 18px;"></span>
+                            <span style="color: #555; font-size: 20px;">{{point1}}</span>
                         </li>
-                        <li style="margin-bottom: 15px; display: flex; align-items: center;">
-                            <span style="width: 8px; height: 8px; background: #8B4513; border-radius: 50%; margin-right: 15px;"></span>
-                            <span style="color: #555; font-size: 16px;">{{point2}}</span>
+                        <li style="margin-bottom: 20px; display: flex; align-items: center;">
+                            <span style="width: 12px; height: 12px; background: #8B4513; border-radius: 50%; margin-right: 18px;"></span>
+                            <span style="color: #555; font-size: 20px;">{{point2}}</span>
                         </li>
-                        <li style="margin-bottom: 15px; display: flex; align-items: center;">
-                            <span style="width: 8px; height: 8px; background: #8B4513; border-radius: 50%; margin-right: 15px;"></span>
-                            <span style="color: #555; font-size: 16px;">{{point3}}</span>
+                        <li style="margin-bottom: 20px; display: flex; align-items: center;">
+                            <span style="width: 12px; height: 12px; background: #8B4513; border-radius: 50%; margin-right: 18px;"></span>
+                            <span style="color: #555; font-size: 20px;">{{point3}}</span>
                         </li>
                     </ul>
                 </div>
-                <div class="ppt-card" tabindex="0" style="background: linear-gradient(135deg, var(--background) 0%, var(--cream) 100%); padding: 30px; border-radius: 15px; box-shadow: var(--shadow-soft); min-width: 200px; text-align: center;">
-                    <div style="font-size: 48px; font-weight: 700; color: #8B4513; margin-bottom: 10px;">{{mainStat}}</div>
-                    <div style="font-size: 16px; color: #A0937D; font-weight: 500;">{{mainStatLabel}}</div>
+                <div class="ppt-card" tabindex="0" style="background: linear-gradient(135deg, var(--background) 0%, var(--cream) 100%); padding: 40px; border-radius: 15px; box-shadow: var(--shadow-soft); min-width: 250px; text-align: center;">
+                    <div style="font-size: 56px; font-weight: 700; color: #8B4513; margin-bottom: 15px;">{{mainStat}}</div>
+                    <div style="font-size: 20px; color: #A0937D; font-weight: 500;">{{mainStatLabel}}</div>
                 </div>
             </div>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px;">
-            <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 30px 20px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center;">
-                <div style="font-size: 36px; font-weight: 700; color: var(--primary-brown); margin-bottom: 10px;">{{stat1Value}}</div>
-                <div style="font-size: 14px; color: var(--secondary-brown); text-transform: uppercase;">{{stat1Label}}</div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px;">
+            <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 40px 25px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center;">
+                <div style="font-size: 44px; font-weight: 700; color: var(--primary-brown); margin-bottom: 15px;">{{stat1Value}}</div>
+                <div style="font-size: 16px; color: var(--secondary-brown); text-transform: uppercase;">{{stat1Label}}</div>
             </div>
-            <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 30px 20px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center;">
-                <div style="font-size: 36px; font-weight: 700; color: var(--primary-brown); margin-bottom: 10px;">{{stat2Value}}</div>
-                <div style="font-size: 14px; color: var(--secondary-brown); text-transform: uppercase;">{{stat2Label}}</div>
+            <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 40px 25px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center;">
+                <div style="font-size: 44px; font-weight: 700; color: var(--primary-brown); margin-bottom: 15px;">{{stat2Value}}</div>
+                <div style="font-size: 16px; color: var(--secondary-brown); text-transform: uppercase;">{{stat2Label}}</div>
             </div>
-            <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 30px 20px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center;">
-                <div style="font-size: 36px; font-weight: 700; color: var(--primary-brown); margin-bottom: 10px;">{{stat3Value}}</div>
-                <div style="font-size: 14px; color: var(--secondary-brown); text-transform: uppercase;">{{stat3Label}}</div>
+            <div class="ppt-card" tabindex="0" style="background: var(--background); padding: 40px 25px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center;">
+                <div style="font-size: 44px; font-weight: 700; color: var(--primary-brown); margin-bottom: 15px;">{{stat3Value}}</div>
+                <div style="font-size: 16px; color: var(--secondary-brown); text-transform: uppercase;">{{stat3Label}}</div>
             </div>
         </div>
     </div>`

@@ -138,7 +138,7 @@ const SlideFactory: React.FC<SlideFactoryProps> = ({ slide, slideNumber, totalSl
       // 차트 플레이스홀더가 있을 경우 실제 ChartRenderer를 삽입해 표시
       const { before, after, hasChart } = splitByChartArea(safe);
       if (hasChart && slide.type === 'chart') {
-        const { containerRef, contentRef, scale } = useAutoFitScale({ maxScale: 1.25, paddingRatio: 0.995 });
+        const { containerRef, contentRef, scale } = useAutoFitScale({ maxScale: 1.5, paddingRatio: 0.98 });
         return (
           <div className="relative slide-container bg-white" ref={containerRef}>
             <div className="absolute top-4 right-4 bg-[var(--primary-brown)] text-white text-xs px-2 py-1 rounded-md shadow">
@@ -156,7 +156,7 @@ const SlideFactory: React.FC<SlideFactoryProps> = ({ slide, slideNumber, totalSl
           </div>
         );
       }
-      const { containerRef, contentRef, scale } = useAutoFitScale({ maxScale: 1.25, paddingRatio: 0.995 });
+      const { containerRef, contentRef, scale } = useAutoFitScale({ maxScale: 1.5, paddingRatio: 0.98 });
       return (
         <div className="relative slide-container bg-white" ref={containerRef}>
           <div className="absolute top-4 right-4 bg-[var(--primary-brown)] text-white text-xs px-2 py-1 rounded-md shadow">

@@ -80,12 +80,6 @@ const GeneratorPage: React.FC = () => {
   return (
     <div className={`min-h-screen bg-gradient-to-br from-[var(--background)] to-[var(--cream)] theme-${formData.style} ${langClass}`}>
       <div className="container mx-auto px-4 py-8">
-        <div className="text-center mb-12">
-           <h1 className="luxe-title mb-4 luxe-font-display">PPT 기반 AI 통역 트레이너</h1>
-          <p className="luxe-subtitle">
-            스크립트 재생 → 내 통역 녹음 → AI 평가(Azure+Gemini). 정확도·완성도·자연스러움을 한눈에 확인하세요.
-          </p>
-        </div>
 
         <div className="grid lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
           {/* 왼쪽: 입력 폼 */}

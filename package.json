@@ -13,6 +13,7 @@
     "@types/node": "^24.2.0",
     "axios": "^1.11.0",
     "chart.js": "^4.5.0",
+    "firebase": "^12.3.0",
     "lucide-react": "^0.539.0",
     "microsoft-cognitiveservices-speech-sdk": "^1.45.0",
     "react": "^19.1.1",

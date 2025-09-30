@@ -9,21 +9,42 @@ import type { GeneratePPTParams } from '../types';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { getTemplateSequence, bindTemplateData } from '../utils/htmlTemplates';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY as string | undefined;
 const MODEL_NAME = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || 'gemini-2.5-flash';
-const API_ENDPOINT_BASE = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+// API 엔드포인트 설정
+const getAPIEndpoint = (model: string) => {
+  if (model.startsWith('gpt-')) {
+    return 'https://api.openai.com/v1/chat/completions';
+  }
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+};
+
+const getAPIKey = (model: string) => {
+  if (model.startsWith('gpt-')) {
+    return OPENAI_API_KEY;
+  }
+  return GEMINI_API_KEY;
+};
 
 // 모델 우선순위 설정 (할당량 소진 시 자동 우회)
 const PPT_MODEL_FALLBACKS = [
-  'gemini-2.5-flash-lite', // 1순위: 기본 모델 (저렴하고 빠름)
-  'gemini-2.5-flash',      // 2순위: 할당량 소진 시
-  'gemini-2.0-flash'       // 3순위: 최후 수단
+  'gemini-2.5-flash-lite', // 1순위: 기본 생성 모델 (저렴하고 빠름)
+  'gemini-1.5-flash',      // 2순위: 안정적인 대안
+  'gemini-2.0-flash',      // 3순위: Gemini 최후 수단
+  'gpt-4o-mini',           // 4순위: GPT 기본 모델
+  'gpt-3.5-turbo-0125',    // 5순위: GPT 안정 모델
+  'gpt-4.1-mini'           // 6순위: GPT 최고급 모델
 ];
 
 const EVAL_MODEL_FALLBACKS = [
   'gemini-2.5-flash-lite', // 1순위: 기본 평가 모델 (저렴하고 빠름)
   'gemini-1.5-flash',      // 2순위: 안정적인 대안
-  'gemini-2.0-flash'       // 3순위: 최후 수단
+  'gemini-2.0-flash',      // 3순위: Gemini 최후 수단
+  'gpt-4o-mini',           // 4순위: GPT 기본 모델
+  'gpt-3.5-turbo-0125',    // 5순위: GPT 안정 모델
+  'gpt-4.1-mini'           // 6순위: GPT 최고급 모델
 ];
 
 function logAI(...args: any[]) {
@@ -54,8 +75,8 @@ function logAIError(...args: any[]) {
 }
 
 function ensureApiKeyPresent(): void {
-  if (!API_KEY) {
-    throw new Error('환경변수 VITE_GEMINI_API_KEY 가 설정되어 있지 않습니다. .env 파일을 확인하세요.');
+  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+    throw new Error('환경변수 VITE_GEMINI_API_KEY 또는 VITE_OPENAI_API_KEY 중 하나는 설정되어야 합니다. .env 파일을 확인하세요.');
   }
 }
 
@@ -173,49 +194,27 @@ async function callGemini(prompt: string, model: string, generationConfig: any, 
   
   for (let i = 0; i < modelsToTry.length; i++) {
     const currentModel = modelsToTry[i];
-    const endpoint = `${API_ENDPOINT_BASE(currentModel)}?key=${API_KEY ?? ''}`;
+    const provider = currentModel.startsWith('gpt-') ? 'gpt' : 'gemini';
     
     try {
-      logAI('Request Gemini', { model: currentModel, endpoint, attempt: i + 1 });
+      logAI('Request AI', { provider, model: currentModel, attempt: i + 1 });
       logAI('Prompt Preview', prompt.slice(0, 800));
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig }),
-      });
-
-      logAI('Response status', res.status, res.statusText);
+      let data: any;
       
-      if (!res.ok) {
-        const t = await res.text();
-        logAIError('Error body', t.slice(0, 2000));
-        
-        // 할당량 소진 또는 모델 사용 불가 시 다음 모델 시도
-        if (res.status === 429 || res.status === 403 || t.includes('quota') || t.includes('rate limit')) {
-          if (i < modelsToTry.length - 1) {
-            logAI(`🚨 Model ${currentModel} quota exceeded! Trying next model: ${modelsToTry[i + 1]}`);
-            continue;
-          } else {
-            logAIError(`❌ All models exhausted. Last error: ${res.status} ${res.statusText}`);
-          }
-        }
-        
-        throw new Error(`Gemini API 오류: ${res.status} ${res.statusText} - ${t}`);
+      if (provider === 'gemini') {
+        data = await callGeminiAPI(prompt, currentModel, generationConfig);
+      } else if (provider === 'gpt') {
+        data = await callGPTAPI(prompt, currentModel);
       }
-      
-      const data = await res.json();
-      logAI('Raw keys', Object.keys(data || {}));
-      const um = data?.usageMetadata;
-      if (um) logAI('Tokens', { prompt: um.promptTokenCount, total: um.totalTokenCount, thoughts: um.thoughtsTokenCount });
       
       // 성공 시 사용된 모델 로그
       if (i > 0) {
-        logAI(`✅ Successfully used fallback model: ${currentModel} (original: ${model})`);
-        console.log(`🔄 [AI Model] Fallback used: ${currentModel} (original: ${model})`);
+        logAI(`✅ Successfully used fallback model: ${provider}/${currentModel} (original: ${model})`);
+        console.log(`🔄 [AI Model] Fallback used: ${provider}/${currentModel} (original: ${model})`);
       } else {
-        logAI(`✅ Using primary model: ${currentModel}`);
-        console.log(`🎯 [AI Model] Primary used: ${currentModel}`);
+        logAI(`✅ Using primary model: ${provider}/${currentModel}`);
+        console.log(`🎯 [AI Model] Primary used: ${provider}/${currentModel}`);
       }
       
       return data;
@@ -223,7 +222,7 @@ async function callGemini(prompt: string, model: string, generationConfig: any, 
     } catch (error) {
       // 네트워크 오류나 기타 예외 시에도 다음 모델 시도
       if (i < modelsToTry.length - 1) {
-        logAIError(`Model ${currentModel} failed, trying next model: ${modelsToTry[i + 1]}`, error);
+        logAIError(`Model ${provider}/${currentModel} failed, trying next model: ${modelsToTry[i + 1]}`, error);
         continue;
       }
       throw error;
@@ -231,6 +230,103 @@ async function callGemini(prompt: string, model: string, generationConfig: any, 
   }
   
   throw new Error(`모든 모델 시도 실패: ${modelsToTry.join(', ')}`);
+}
+
+// Gemini API 호출 함수
+async function callGeminiAPI(prompt: string, model: string, generationConfig: any): Promise<any> {
+  const apiKey = getAPIKey(model);
+  if (!apiKey) {
+    throw new Error('Gemini API 키가 설정되지 않았습니다.');
+  }
+  
+  const endpoint = `${getAPIEndpoint(model)}?key=${apiKey}`;
+  
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      contents: [{ role: 'user', parts: [{ text: prompt }] }], 
+      generationConfig 
+    }),
+  });
+
+  logAI('Gemini Response status', res.status, res.statusText);
+  
+  if (!res.ok) {
+    const t = await res.text();
+    logAIError('Gemini Error body', t.slice(0, 2000));
+    
+    // 할당량 소진 또는 모델 사용 불가 시 에러 던지기 (상위에서 폴백 처리)
+    if (res.status === 429 || res.status === 403 || t.includes('quota') || t.includes('rate limit')) {
+      throw new Error(`Gemini quota exceeded: ${res.status} ${res.statusText}`);
+    }
+    
+    throw new Error(`Gemini API 오류: ${res.status} ${res.statusText} - ${t}`);
+  }
+  
+  const data = await res.json();
+  logAI('Gemini Raw keys', Object.keys(data || {}));
+  const um = data?.usageMetadata;
+  if (um) logAI('Gemini Tokens', { prompt: um.promptTokenCount, total: um.totalTokenCount, thoughts: um.thoughtsTokenCount });
+  
+  return data;
+}
+
+// GPT API 호출 함수
+async function callGPTAPI(prompt: string, model: string): Promise<any> {
+  const apiKey = getAPIKey(model);
+  if (!apiKey) {
+    throw new Error('OpenAI API 키가 설정되지 않았습니다.');
+  }
+  
+  const response = await fetch(getAPIEndpoint(model), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }],
+      temperature: 0.7,
+      max_tokens: 4096
+    })
+  });
+
+  logAI('GPT Response status', response.status, response.statusText);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logAIError('GPT Error body', errorText.slice(0, 2000));
+    
+    // 할당량 소진 또는 모델 사용 불가 시 에러 던지기 (상위에서 폴백 처리)
+    if (response.status === 429 || response.status === 403 || errorText.includes('quota') || errorText.includes('rate limit')) {
+      throw new Error(`GPT quota exceeded: ${response.status} ${response.statusText}`);
+    }
+    
+    throw new Error(`GPT API 오류: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  logAI('GPT Raw keys', Object.keys(data || {}));
+  
+  // GPT 응답을 Gemini 형식으로 변환
+  return {
+    candidates: [{
+      content: {
+        parts: [{
+          text: data.choices?.[0]?.message?.content || ''
+        }]
+      }
+    }],
+    usageMetadata: {
+      promptTokenCount: data.usage?.prompt_tokens || 0,
+      totalTokenCount: data.usage?.total_tokens || 0
+    }
+  };
 }
 
 function extractJsonString(text: string): string {
@@ -1076,6 +1172,12 @@ async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise
     language: params.language,
   } as GeneratePPTParams);
 
+  // 터미널에 전체 프롬프트 출력
+  console.log('=== 전체 프롬프트 ===');
+  console.log(prompt);
+  console.log('=== 프롬프트 길이 ===');
+  console.log(prompt.length);
+
   const data = await callGemini(prompt, MODEL_NAME, {
     temperature: 0.65,
     topP: 0.8,
@@ -1085,6 +1187,13 @@ async function generatePPTWithTemplates(params: GeneratePPTParamsLocal): Promise
   }, PPT_MODEL_FALLBACKS);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   if (!text) throw new Error('템플릿 기반 응답이 비어 있습니다.');
+  
+  // 터미널에 AI 응답 전체 출력
+  console.log('=== AI 응답 전체 ===');
+  console.log(text);
+  console.log('=== 응답 길이 ===');
+  console.log(text.length);
+  
   const parsed = JSON.parse(extractJsonString(text));
 
   const sequence = getTemplateSequence(params.slideCount);
